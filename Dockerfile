@@ -73,6 +73,6 @@ RUN pip install requests uuid
 
 COPY . .
 
-EXPOSE 8501
+EXPOSE 8080
 
 ENTRYPOINT ["python", "application/app.py"]
