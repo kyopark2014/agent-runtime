@@ -60,6 +60,19 @@ sudo docker logs langgraph-agent-container
 ```
 
 
+## 실행하기
+
+여기서는 Streamlit을 이용하여 AgentCore의 동작을 테스트 할 수 있습니다. 아래와 streamlit을 실행할 수 있습니다.
+
+```text
+streamlit run application/app.py
+```
+
+실행 후에 아래와 같이 왼쪽 메뉴에서 사용할 MCP 서버를 선택하고 질문을 입력합니다.
+
+<img width="1330" height="847" alt="image" src="https://github.com/user-attachments/assets/50cda7f5-3cd2-4a21-8c36-c0d8272fad2a" />
+
+
 
 ## Reference 
 
