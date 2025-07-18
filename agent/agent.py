@@ -57,6 +57,5 @@ def langgraph_bedrock(payload):
     }
 
 if __name__ == "__main__":
-    # langgraph_bedrock({"prompt": "안녕"})
     app.run()
 

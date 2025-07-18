@@ -3,19 +3,22 @@ import json
 import utils
 import uuid
 
-aws_region = utils.bedrock_region
+region_name = utils.bedrock_region
 accountId = utils.accountId
 projectName = utils.projectName
 agent_runtime_role = utils.agent_runtime_role
-
-agent_core_client = boto3.client('bedrock-agentcore', region_name='us-west-2')
+agentRuntimeArn = utils.agent_runtime_arn
+print(f"agentRuntimeArn: {agentRuntimeArn}")
 
 payload = json.dumps({
     "prompt": "서울 날씨는?",
     "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"]
 })
+
+agent_core_client = boto3.client('bedrock-agentcore', region_name=region_name)
+
 response = agent_core_client.invoke_agent_runtime(
-    agentRuntimeArn=f'arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_langgraph-OvvIK7DIFD',
+    agentRuntimeArn=agentRuntimeArn,
     runtimeSessionId=str(uuid.uuid4()),
     payload=payload,
     qualifier="DEFAULT"

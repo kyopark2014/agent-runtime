@@ -25,7 +25,6 @@ logger = logging.getLogger("utils")
 aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
 aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
 aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
-aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
 def load_config():
     config = None
@@ -44,6 +43,7 @@ bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
 agent_runtime_role = config['agent_runtime_role']
+agent_runtime_arn = config['agent_runtime_arn']
 
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):
