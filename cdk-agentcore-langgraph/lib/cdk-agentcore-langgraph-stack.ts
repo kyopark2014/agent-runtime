@@ -379,10 +379,21 @@ export class CdkAgentcoreLanggraphStack extends cdk.Stack {
         statements: [bedrockInvokePolicy]
       })
     );
+    const s3AccessPolicy = new iam.PolicyStatement({
+      resources: [`arn:aws:s3:::*/*`],
+      actions: ['s3:*'],
+    });
+    agentRuntimeRole.attachInlinePolicy( 
+      new iam.Policy(this, `agent-runtime-s3-access-policy-for-${projectName}`, {
+        statements: [s3AccessPolicy],
+      }),
+    );
+
+    s3Bucket.grantReadWrite(agentRuntimeRole);
     weatherApiSecret.grantRead(agentRuntimeRole);
     tavilyApiSecret.grantRead(agentRuntimeRole);
     perplexityApiSecret.grantRead(agentRuntimeRole);    
-
+    
     const environment = {
       "projectName": projectName,
       "accountId": accountId,

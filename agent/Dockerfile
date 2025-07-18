@@ -66,7 +66,7 @@ RUN pip install yfinance==0.2.52 pytz==2024.2 beautifulsoup4==4.12.3
 RUN pip install PyPDF2 reportlab
 
 # Image processing
-RUN pip install Pillow
+RUN pip install Pillow colorama
 
 # Additional utilities
 RUN pip install requests uuid
@@ -74,8 +74,8 @@ RUN pip install requests uuid
 COPY . .
 
 # Add the current directory to Python path
-ENV PYTHONPATH=/app:/app/mcp-agent
+ENV PYTHONPATH=/app
 
 EXPOSE 8080
 
-CMD ["uv", "run", "uvicorn", "mcp-agent.agent:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uv", "run", "uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "8080"]
