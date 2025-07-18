@@ -1,10 +1,10 @@
-# agentcore-langgraph
-It is a langgraph agent based on AgentCore.
+# AgentCore Langgraph
 
+여기에서는 AgentCore를 이용해 LangGraph로 만든 Agent를 사용하는 방법에 대해 설명합니다.
 
 bedrock-agentcore:GetAgentRuntime 퍼미션이 필요합니다.
 
-
+## 주요 구현
 
 ### Local Test
 
