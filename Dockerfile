@@ -74,9 +74,9 @@ RUN pip install requests uuid
 COPY . .
 
 # Add the current directory to Python path
-ENV PYTHONPATH=/app:/app/application
+ENV PYTHONPATH=/app:/app/mcp-agent
 
 EXPOSE 8080
 
-# ENTRYPOINT ["python", "application/app.py"]
-CMD ["uv", "run", "uvicorn", "application.app:app", "--host", "0.0.0.0", "--port", "8080"]
+# ENTRYPOINT ["python", "mcp-agent/app.py"]
+CMD ["uv", "run", "uvicorn", "mcp-agent.app:app", "--host", "0.0.0.0", "--port", "8080"]
