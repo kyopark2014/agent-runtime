@@ -2,6 +2,10 @@
 It is a langgraph agent based on AgentCore.
 
 
+bedrock-agentcore:GetAgentRuntime 퍼미션이 필요합니다.
+
+
+
 ### Local Test
 
 #### 동작 테스트
