@@ -246,7 +246,7 @@ export class CdkAgentcoreLanggraphStack extends cdk.Stack {
     OpenSearchCollection.addDependency(dataAccessPolicy);
 
     // Weather
-    new secretsmanager.Secret(this, `weather-api-secret-for-${projectName}`, {
+    const weatherApiSecret = new secretsmanager.Secret(this, `weather-api-secret-for-${projectName}`, {
       description: 'secret for weather api key', // openweathermap
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       secretName: `openweathermap-${projectName}`,
@@ -257,7 +257,7 @@ export class CdkAgentcoreLanggraphStack extends cdk.Stack {
     });
 
     // Tavily
-    new secretsmanager.Secret(this, `tavily-secret-for-${projectName}`, {
+    const tavilyApiSecret = new secretsmanager.Secret(this, `tavily-secret-for-${projectName}`, {
       description: 'secret for tavily api key', // tavily
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       secretName: `tavilyapikey-${projectName}`,
@@ -268,7 +268,7 @@ export class CdkAgentcoreLanggraphStack extends cdk.Stack {
     });
 
     // perplexity
-    new secretsmanager.Secret(this, `perflexity-secret-for-${projectName}`, {
+    const perplexityApiSecret = new secretsmanager.Secret(this, `perflexity-secret-for-${projectName}`, {
       description: 'secret for perflexity api key', // tavily
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       secretName: `perplexityapikey-${projectName}`,
@@ -379,6 +379,9 @@ export class CdkAgentcoreLanggraphStack extends cdk.Stack {
         statements: [bedrockInvokePolicy]
       })
     );
+    weatherApiSecret.grantRead(agentRuntimeRole);
+    tavilyApiSecret.grantRead(agentRuntimeRole);
+    perplexityApiSecret.grantRead(agentRuntimeRole);    
 
     const environment = {
       "projectName": projectName,
