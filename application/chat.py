@@ -115,55 +115,6 @@ def print_doc(i, doc):
             
     logger.info(f"{i}: {text}, metadata:{doc.metadata}")
 
-reference_docs = []
-# api key to get weather information in agent
-if aws_access_key and aws_secret_key:
-    secretsmanager = boto3.client(
-        service_name='secretsmanager',
-        region_name=bedrock_region,
-        aws_access_key_id=aws_access_key,
-        aws_secret_access_key=aws_secret_key,
-        aws_session_token=aws_session_token,
-    )
-else:
-    secretsmanager = boto3.client(
-        service_name='secretsmanager',
-        region_name=bedrock_region,
-    )
-
-# api key for weather
-weather_api_key = ""
-try:
-    get_weather_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"openweathermap-{projectName}"
-    )
-    #print('get_weather_api_secret: ', get_weather_api_secret)
-    secret = json.loads(get_weather_api_secret['SecretString'])
-    #print('secret: ', secret)
-    weather_api_key = secret['weather_api_key']
-
-except Exception as e:
-    raise e
-
-# api key to use LangSmith
-langsmith_api_key = ""
-try:
-    get_langsmith_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"langsmithapikey-{projectName}"
-    )
-    #print('get_langsmith_api_secret: ', get_langsmith_api_secret)
-    secret = json.loads(get_langsmith_api_secret['SecretString'])
-    #print('secret: ', secret)
-    langsmith_api_key = secret['langsmith_api_key']
-    langchain_project = secret['langchain_project']
-except Exception as e:
-    raise e
-
-if langsmith_api_key:
-    os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
-    os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_PROJECT"] = langchain_project
-    
 def tavily_search(query, k):
     docs = []    
     try:

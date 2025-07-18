@@ -41,7 +41,9 @@ def load_config():
 config = load_config()
 
 bedrock_region = config['region']
+accountId = config['accountId']
 projectName = config['projectName']
+agent_runtime_role = config['agent_runtime_role']
 
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):
@@ -140,21 +142,21 @@ except Exception as e:
     # raise e
     pass
 
-# api key to use firecrawl Search
-firecrawl_key = ""
-try:
-    get_firecrawl_secret = secretsmanager.get_secret_value(
-        SecretId=f"firecrawlapikey-{projectName}"
-    )
-    secret = json.loads(get_firecrawl_secret['SecretString'])
+# # api key to use firecrawl Search
+# firecrawl_key = ""
+# try:
+#     get_firecrawl_secret = secretsmanager.get_secret_value(
+#         SecretId=f"firecrawlapikey-{projectName}"
+#     )
+#     secret = json.loads(get_firecrawl_secret['SecretString'])
 
-    if "firecrawl_api_key" in secret:
-        firecrawl_key = secret['firecrawl_api_key']
-        # print('firecrawl_api_key: ', firecrawl_key)
-except Exception as e: 
-    logger.info(f"Firecrawl credential is required: {e}")
-    # raise e
-    pass
+#     if "firecrawl_api_key" in secret:
+#         firecrawl_key = secret['firecrawl_api_key']
+#         # print('firecrawl_api_key: ', firecrawl_key)
+# except Exception as e: 
+#     logger.info(f"Firecrawl credential is required: {e}")
+#     # raise e
+#     pass
 
 # api key to use perplexity Search
 perplexity_key = ""

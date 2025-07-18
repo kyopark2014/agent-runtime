@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 python:3.13-slim
+FROM --platform=linux/arm64 python:3.13-slim
 
 RUN apt-get update && apt-get install -y \
     curl \
@@ -16,8 +16,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install AWS CLI
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" \
+# Install AWS CLI for ARM64
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip" \
     && unzip awscliv2.zip \
     && ./aws/install \
     && rm -rf aws awscliv2.zip
@@ -53,7 +53,7 @@ WORKDIR /app
 # Core dependencies
 RUN pip install langchain_aws langchain langchain_community langchain_experimental langgraph
 RUN pip install mcp langchain-mcp-adapters==0.0.9
-RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit
+RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv
 
 # AWS and search dependencies
 RUN pip install aioboto3 opensearch-py
@@ -73,6 +73,10 @@ RUN pip install requests uuid
 
 COPY . .
 
+# Add the current directory to Python path
+ENV PYTHONPATH=/app:/app/application
+
 EXPOSE 8080
 
-ENTRYPOINT ["python", "application/app.py"]
+# ENTRYPOINT ["python", "application/app.py"]
+CMD ["uv", "run", "uvicorn", "application.app:app", "--host", "0.0.0.0", "--port", "8080"]

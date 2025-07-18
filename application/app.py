@@ -47,14 +47,17 @@ def langgraph_bedrock(payload):
     """
     Invoke the agent with a payload
     """
-    user_input = payload.get("prompt")
+    user_message = payload.get("prompt")
+    logger.info(f"user_message: {user_message}")
 
-    response, image_url = asyncio.run(langgraph_agent.run_agent(user_input, mcp_servers))    
+    response, image_url = asyncio.run(langgraph_agent.run_agent(user_message, mcp_servers))    
     logger.info(f"response: {response}")
 
-    return response
+    return {
+        "result": response
+    }
 
 if __name__ == "__main__":
-    langgraph_bedrock({"prompt": "안녕"})
+    # langgraph_bedrock({"prompt": "안녕"})
     app.run()
 

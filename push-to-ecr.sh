@@ -5,7 +5,7 @@ set -e
 TIMESTAMP=$(date +%Y%m%d%H%M%S)
 AWS_REGION="us-west-2"
 AWS_ACCOUNT_ID="262976740991"
-ECR_REPOSITORY="langgraph-agent"  # ECR repository name to use
+ECR_REPOSITORY="agentcore-langgraph"  # ECR repository name to use
 IMAGE_TAG="${TIMESTAMP}"
 ECR_URI="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
 
