@@ -149,6 +149,47 @@ sudo docker logs coreagent-langgraph-container
 
 ## 실행하기
 
+### 환경 준비
+
+Agent의 동작 테스트를 위해 S3, CloudFront, OpenSearch (Serverless), Bedrock Knowledge Base이 필요합니다. 이를 위한 상세 내용은 [cdk-agentcore](./cdk-agentcore/lib/cdk-agentcore-stack.ts)을 참조합니다. 이를 인프라로 배포할 때에는 아래와 같이 수행합니다.
+
+먼저, cdk-agentcore로 이동하여 CDK 환경설정을 준비합니다. 만약 한번도 bootstrapping을 하지 않았다면, [AWS CDK 부트스트래핑](https://docs.aws.amazon.com/ko_kr/cdk/v2/guide/bootstrapping.html)을 참조하여 수행합니다.
+
+- Bootstrapping
+
+여기서 account-id를 확인하여 아래의 "123456789012"을 바꾼후 실행합니다.
+
+```text
+cdk bootstrap aws://123456789012/us-west-2
+```
+
+- CDK 배포
+
+```text
+cd cdk-agentcore && npm install
+cdk deploy --require-approval never --all
+```
+
+배포가 완료되면 아래와 같은 Output 파일에서 CdkAgentcoreStack.environmentforagentcore 을 복사하여 langgraph와 strands 폴더에 [config.json](./langgraph/config.json)로 업데이트 합니다.
+
+<img width="945" height="132" alt="image" src="https://github.com/user-attachments/assets/ce2a5a90-2306-4048-927e-5bf698691dec" />
+
+
+### 문서 동기화 하기 
+
+Knowledge Base에서 문서를 활용하기 위해서는 S3에 문서 등록 및 동기화기 필요합니다. 
+
+여기에서는 테스트를 위해 "실제사례/실제사례1/searchplatform-[Phase1] 4월8일 오픈타겟 검색지면 포장 대응-270625-100949.pdf"를 활용하고자 합니다. [S3 Console](https://us-west-2.console.aws.amazon.com/s3/home?region=us-west-2)에 접속하여 "storage-for-woo-project-xxxxxxxxxxxx-us-west-2"를 선택하고, 아래와 같이 docs폴더를 생성한 후에 파일을 업로드 합니다. 
+
+<img width="400" alt="image" src="https://github.com/user-attachments/assets/482f635e-a38d-4525-b9a3-fb1c2a9089c8" />
+
+이후 [Knowledge Bases Console](https://us-west-2.console.aws.amazon.com/bedrock/home?region=us-west-2#/knowledge-bases)에 접속하여, "woo-project"라는 Knowledge Base를 선택합니다. 이후 아래와 같이 [Sync]를 선택합니다.
+
+<img width="1533" height="287" alt="noname" src="https://github.com/user-attachments/assets/2edd3b6b-dbce-4784-b640-139fa84cc223" />
+
+
+### Streamlit에서 실행하기
+
 여기서는 Streamlit을 이용하여 AgentCore의 동작을 테스트 할 수 있습니다. 아래와 streamlit을 실행할 수 있습니다.
 
 ```text
