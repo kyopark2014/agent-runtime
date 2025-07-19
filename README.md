@@ -85,9 +85,13 @@ response = client.update_agent_runtime(
 ./run-docker.sh
 ```
 
-이후 [curl.sh](./curl.sh)과 같이 동작을 테스트 할 수 있습니다. curl.sh의 내용은 아래와 같습니다.
+이후 [curl.sh](./curl.sh)과 같이 동작을 테스트 할 수 있습니다. 
 
-이후 아래와 같이 local에서 테스트 할 수 있습니다. "Hello world!"라고 입력시 현재 시간 확인후 아래와 같이 답변하고 있습니다. 기본으로 사용할 MCP server와 model 정보를 질문과 함께 제공합니다.
+```text
+./curl.sh
+```
+
+[curl.sh](./curl.sh)을 이용하면 아래와 같이 local에서 테스트 할 수 있습니다. MCP server와 model 정보를 질문과 함께 제공합니다.
 
 ```text
 curl -X POST http://localhost:8080/invocations \
@@ -95,7 +99,7 @@ curl -X POST http://localhost:8080/invocations \
 -d '{"prompt": "내 s3 bucket 리스트는?", "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"], "model_name": "Claude 3.7 Sonnet"}'
 ```
 
-이밖에 [invoke_agent.py](./langgraph/invoke_agent.py)와 같이 코드 동작으로 확인할 수 있습니다.
+[invoke_agent.py](./langgraph/invoke_agent.py)와 같이 코드로도 동작으로 확인할 수 있습니다.
 
 ```text
 python invoke_agent.py
