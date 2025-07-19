@@ -53,7 +53,12 @@ def invoke_agent(payload):
     chat.update(modelName=model_name, debugMode=debug_mode)
     history_mode = 'Disable'
 
-    response, image_url = asyncio.run(langgraph_agent.run_agent(user_message, mcp_servers, history_mode, containers=None))    
+    response, image_url = asyncio.run(langgraph_agent.run_agent(
+        question=user_message, 
+        mcp_servers=mcp_servers, 
+        historyMode=history_mode, 
+        containers=None)
+    )    
     logger.info(f"response: {response}")
 
     return response
