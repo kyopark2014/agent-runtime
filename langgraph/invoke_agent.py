@@ -25,6 +25,30 @@ response = agent_core_client.invoke_agent_runtime(
     qualifier="DEFAULT"
 )
 
-response_body = response['response'].read()
-response_data = json.loads(response_body)
-print("Agent Response:", response_data)
+# response_body = response['response'].read()
+# response_data = json.loads(response_body)
+# print("Agent Response:", response_data)
+
+# Process and print the response
+if "text/event-stream" in response.get("contentType", ""):
+    # Handle streaming response
+    content = []
+    for line in response["response"].iter_lines(chunk_size=10):
+        if line: 
+            line = line.decode("utf-8")
+        if line.startswith("data: "):
+            line = line[6:]
+            print(line)
+            content.append(line)
+    print("\nComplete response:", "\n".join(content))
+
+elif response.get("contentType") == "application/json":
+    # Handle standard JSON response
+    content = []
+    for chunk in response.get("response", []):
+        content.append(chunk.decode('utf-8'))
+        print(json.loads(''.join(content)))
+
+else:
+    # Print raw response
+    print(response)

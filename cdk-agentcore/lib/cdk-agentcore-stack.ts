@@ -387,6 +387,12 @@ export class CdkAgentcoreStack extends cdk.Stack {
         statements: [s3AccessPolicy],
       }),
     );
+    agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      resources: ['*'],
+      actions: [
+        'lambda:InvokeFunction'
+      ]
+    }));
 
     s3Bucket.grantReadWrite(agentRuntimeRole);
     weatherApiSecret.grantRead(agentRuntimeRole);

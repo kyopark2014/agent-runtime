@@ -98,7 +98,7 @@ with st.sidebar:
 
     # platform selection box
     platform = st.radio(
-        label="사용 플렛폼을 선택하세요. ",options=["AgentCore","Docker"], index=1
+        label="사용 플렛폼을 선택하세요. ",options=["AgentCore","Docker"], index=0
     )   
 
     if platform == 'AgentCore':
