@@ -144,7 +144,7 @@ response = requests.post(destination, headers=headers, data=payload, timeout=30)
 문제 발생시 Docker 로그를 아래와 같이 확인합니다.
 
 ```text
-sudo docker logs langgraph-agent-container
+sudo docker logs coreagent-langgraph-container
 ```
 
 ## 실행하기
