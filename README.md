@@ -141,40 +141,11 @@ destination = f"http://localhost:8080/invocations"
 response = requests.post(destination, headers=headers, data=payload, timeout=30)
 ```
 
-#### 빌드 테스트
-
-아래와 같이 빌드를 수행합니다.
-
-```text
-cd agent && ./build-docker.sh
-```
-
-아래와 같이 Docker를 실행합니다.
-
-```text
-./run-docker.sh
-```
-
-이후 아래와 같이 실행합니다.
-
-```text
-./curl.sh
-```
-
-이때, curl.sh에는 아래와 같은 값으로 채워져 있습니다.
-
-```text
-curl -X POST http://localhost:8080/invocations \
--H "Content-Type: application/json" \
--d '{"prompt": "서울 날씨는?", "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"]}'
-```
-
 문제 발생시 Docker 로그를 아래와 같이 확인합니다.
 
 ```text
 sudo docker logs langgraph-agent-container
 ```
-
 
 ## 실행하기
 
