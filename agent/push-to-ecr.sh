@@ -60,3 +60,6 @@ docker push ${ECR_URI}
 echo "===== Complete ====="
 echo "Image has been successfully built and pushed to ECR."
 echo "Image URI: ${ECR_URI}"
+
+echo "===== Deploying the Image to AgentCore ====="
+python create_agent_runtime.py

@@ -12,7 +12,8 @@ print(f"agentRuntimeArn: {agentRuntimeArn}")
 
 payload = json.dumps({
     "prompt": "서울 날씨는?",
-    "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"]
+    "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"],
+    "model_name": "Claude 3.7 Sonnet",
 })
 
 agent_core_client = boto3.client('bedrock-agentcore', region_name=region_name)
