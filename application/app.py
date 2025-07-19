@@ -3,6 +3,7 @@ import chat
 import logging
 import sys
 import os
+import knowledge_base as kb
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -93,6 +94,7 @@ with st.sidebar:
         '🖊️ 사용 모델을 선택하세요',
         ("Nova Premier", 'Nova Pro', 'Nova Lite', 'Nova Micro', 'Claude 4 Opus', 'Claude 4 Sonnet', 'Claude 3.7 Sonnet', 'Claude 3.5 Sonnet', 'Claude 3.0 Sonnet', 'Claude 3.5 Haiku'), index=7
     )
+    chat.update(modelName)
 
     # platform selection box
     platform = st.radio(
@@ -108,10 +110,44 @@ with st.sidebar:
     clear_button = st.button("대화 초기화", key="clear")
     # logger.info(f"clear_button: {clear_button}")
 
+    uploaded_file = None
+    st.subheader("📋 문서 업로드")
+    uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
+
 st.title('🔮 '+ mode)
 
-if clear_button==True:
-    chat.initiate()
+if clear_button or "messages" not in st.session_state:
+    st.session_state.messages = []        
+    uploaded_file = None
+    
+    st.session_state.greetings = False
+    st.rerun()  
+
+file_name = ""
+state_of_code_interpreter = False
+if uploaded_file is not None and clear_button==False:
+    logger.info(f"uploaded_file.name: {uploaded_file.name}")
+    if uploaded_file.name:
+        status = '선택한 파일을 업로드합니다.'
+        logger.info(f"status: {status}")
+        st.info(status)
+
+        file_name = uploaded_file.name
+        logger.info(f"uploading... file_name: {file_name}")
+        file_url = chat.upload_to_s3(uploaded_file.getvalue(), file_name)
+        logger.info(f"file_url: {file_url}")
+
+        kb.sync_data_source()  # sync uploaded files
+            
+        status = f'선택한 "{file_name}"의 내용을 요약합니다.'
+        logger.info(f"status: {status}")
+        st.info(status)
+    
+        msg = chat.get_summary_of_uploaded_file(file_name, st)
+        st.session_state.messages.append({"role": "assistant", "content": f"선택한 문서({file_name})를 요약하면 아래와 같습니다.\n\n{msg}"})    
+        logger.info(f"msg: {msg}")
+
+        st.write(msg)        
 
 # Initialize chat history
 if "messages" not in st.session_state:

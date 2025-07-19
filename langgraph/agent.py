@@ -54,7 +54,7 @@ def invoke_agent(payload):
     history_mode = 'Disable'
 
     response, image_url = asyncio.run(langgraph_agent.run_agent(
-        question=user_message, 
+        query=user_message, 
         mcp_servers=mcp_servers, 
         historyMode=history_mode, 
         containers=None)
