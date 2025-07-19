@@ -1,4 +1,4 @@
-# AgentCore Langgraph
+# AgentCore를 이용해 Agent 배포하기
 
 여기에서는 AgentCore를 이용해 LangGraph로 만든 Agent를 사용하는 방법에 대해 설명합니다.
 
