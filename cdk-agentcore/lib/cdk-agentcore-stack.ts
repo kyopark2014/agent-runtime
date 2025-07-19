@@ -390,14 +390,59 @@ export class CdkAgentcoreStack extends cdk.Stack {
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
       resources: ['*'],
       actions: [
-        'lambda:InvokeFunction'
+        'lambda:InvokeFunction',
+        'lambda:GetFunction',
+        'lambda:GetFunctionConfiguration'
       ]
     }));
-
+    
+    // Secrets Manager access permissions
+    const secretsManagerPolicy = new iam.PolicyStatement({
+      resources: ['*'],
+      actions: [
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:DescribeSecret'
+      ],
+    });
+    agentRuntimeRole.attachInlinePolicy( 
+      new iam.Policy(this, `agent-runtime-secrets-manager-policy-for-${projectName}`, {
+        statements: [secretsManagerPolicy],
+      }),
+    );
+    
     s3Bucket.grantReadWrite(agentRuntimeRole);
     weatherApiSecret.grantRead(agentRuntimeRole);
     tavilyApiSecret.grantRead(agentRuntimeRole);
     perplexityApiSecret.grantRead(agentRuntimeRole);    
+
+    agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      resources: ['*'],
+      actions: [
+        's3:ListAllMyBuckets'
+      ]
+    }));
+
+    agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      resources: ['*'],
+      actions: [
+        'ec2:DescribeVolumes',
+        'ec2:DescribeInstances',
+        'ec2:DescribeTags'        
+      ]
+    }));
+
+    agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      resources: ['*'],
+      actions: [
+        'eks:ListClusters',
+        'eks:DescribeCluster',
+        'eks:ListNodegroups',
+        'eks:DescribeNodegroup',
+        'eks:ListUpdates',
+        'eks:DescribeUpdate',
+        'eks:ListFargateProfiles'
+      ]
+    }));
     
     const environment = {
       "projectName": projectName,

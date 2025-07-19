@@ -39,7 +39,12 @@ mcp_options = [
         
 app = BedrockAgentCoreApp()
 
-def invoke_agent(payload):
+@app.entrypoint
+def langgraph_bedrock(payload):
+    """
+    Invoke the agent with a payload
+    """
+    logger.info(f"payload: {payload}")
     user_message = payload.get("prompt")
     logger.info(f"user_message: {user_message}")
 
@@ -60,16 +65,6 @@ def invoke_agent(payload):
         containers=None)
     )    
     logger.info(f"response: {response}")
-
-    return response
-
-@app.entrypoint
-def langgraph_bedrock(payload):
-    """
-    Invoke the agent with a payload
-    """
-    logger.info(f"payload: {payload}")
-    response = invoke_agent(payload)
 
     return {
         "result": response
