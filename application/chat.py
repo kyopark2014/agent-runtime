@@ -24,25 +24,37 @@ def load_config():
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    arn_path = os.path.join(script_dir, "..", 'langgraph', "agent_runtime_arn.json")
-    with open(arn_path, "r", encoding="utf-8") as f:
-        agent_runtime_arn = json.load(f)['agent_runtime_arn']
-        logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
+    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph', "agent_runtime_arn.json")
+    with open(langgraph_arn_path, "r", encoding="utf-8") as f:
+        langgraph_agent_runtime_arn = json.load(f)['agent_runtime_arn']
+        logger.info(f"langgraph_agent_runtime_arn: {langgraph_agent_runtime_arn}")
     
-    return config, agent_runtime_arn
+    strands_arn_path = os.path.join(script_dir, "..", 'strands', "agent_runtime_arn.json")
+    with open(strands_arn_path, "r", encoding="utf-8") as f:
+        strands_agent_runtime_arn = json.load(f)['agent_runtime_arn']
+        logger.info(f"strands_agent_runtime_arn: {strands_agent_runtime_arn}")
+    
+    return config, langgraph_agent_runtime_arn, strands_agent_runtime_arn
 
-config, agent_runtime_arn = load_config()
+config, langgraph_agent_runtime_arn, strands_agent_runtime_arn = load_config()
 
 bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
 
-def run_agent(prompt, mcp_servers, model_name):
+def run_agent(prompt, agent_type, mcp_servers, model_name):
     payload = json.dumps({
         "prompt": prompt,
         "mcp_servers": mcp_servers,
         "model_name": model_name
     })
+
+    if agent_type == 'LangGraph':
+        agent_runtime_arn = langgraph_agent_runtime_arn
+    else: 
+        agent_runtime_arn = strands_agent_runtime_arn
+
+    logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
 
     agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
     response = agent_core_client.invoke_agent_runtime(
