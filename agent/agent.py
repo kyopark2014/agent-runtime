@@ -4,6 +4,7 @@ import os
 import pwd 
 import asyncio
 import langgraph_agent
+import chat
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -49,7 +50,14 @@ def langgraph_bedrock(payload):
     mcp_servers = payload.get("mcp_servers", [])
     logger.info(f"mcp_servers: {mcp_servers}")
 
-    response, image_url = asyncio.run(langgraph_agent.run_agent(user_message, mcp_servers))    
+    model_name = payload.get("model_name")
+    logger.info(f"model_name: {model_name}")
+
+    debug_mode = 'Disable'
+    chat.update(modelName=model_name, debugMode=debug_mode)
+    history_mode = 'Disable'
+
+    response, image_url = asyncio.run(langgraph_agent.run_agent(user_message, mcp_servers, history_mode, containers=None))    
     logger.info(f"response: {response}")
 
     return {

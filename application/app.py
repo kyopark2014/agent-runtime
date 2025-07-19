@@ -94,6 +94,12 @@ with st.sidebar:
         ("Nova Premier", 'Nova Pro', 'Nova Lite', 'Nova Micro', 'Claude 4 Opus', 'Claude 4 Sonnet', 'Claude 3.7 Sonnet', 'Claude 3.5 Sonnet', 'Claude 3.0 Sonnet', 'Claude 3.5 Haiku'), index=7
     )
 
+    # model selection box
+    platform = st.selectbox(
+        '🖊️ 사용 플렛폼을 선택하세요',
+        ("Docker", 'AgentCore'), index=1
+    )
+
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
     # logger.info(f"clear_button: {clear_button}")
@@ -161,7 +167,12 @@ if prompt := st.chat_input("메시지를 입력하세요."):
 
             with st.status("thinking...", expanded=True, state="running") as status:
                 logger.info(f"mcp_servers: {mcp_servers}")
-                response = chat.run_agent(prompt, mcp_servers)
+
+                if platform == 'AgentCore':
+                    response = chat.run_agent(prompt, mcp_servers, modelName)
+                else:
+                    response = chat.run_agent_in_docker(prompt, mcp_servers, modelName)
+
                 st.markdown(response)
 
             image_url = []

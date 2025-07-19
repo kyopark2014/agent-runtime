@@ -34,11 +34,30 @@ sharing_url = config["sharing_url"] if "sharing_url" in config else None
 s3_prefix = "docs"
 capture_prefix = "captures"
 
+status_msg = []
+response_msg = []
 references = []
 image_urls = []
 mcp_server_info = {}
 
 index = 0
+def add_notification(containers, message):
+    global index
+    if containers is not None:
+        containers['notification'][index].info(message)
+    index += 1
+
+def get_status_msg(status):
+    global status_msg
+    status_msg.append(status)
+
+    if status != "end)":
+        status = " -> ".join(status_msg)
+        return "[status]\n" + status + "..."
+    else: 
+        status = " -> ".join(status_msg)
+        return "[status]\n" + status
+
 def get_tool_info(tool_name, tool_content):
     tool_references = []    
     urls = []
@@ -296,13 +315,23 @@ async def call_model(state: State, config):
     
     image_url = state['image_url'] if 'image_url' in state else []
 
+    containers = config.get("configurable", {}).get("containers", None)    
     tools = config.get("configurable", {}).get("tools", None)
     system_prompt = config.get("configurable", {}).get("system_prompt", None)
+    debug_mode = config.get("configurable", {}).get("debug_mode", "Disable")
     
     if isinstance(last_message, ToolMessage):
         tool_name = last_message.name
         tool_content = last_message.content
         logger.info(f"tool_name: {tool_name}, content: {tool_content[:800]}")
+
+        if debug_mode == "Enable":
+            if tool_name == "terminal":
+                add_notification(containers, f"{tool_name}\n\n {tool_content}")
+                response_msg.append(f"{tool_name}: {tool_content}")
+            else:
+                add_notification(containers, f"{tool_name}: {str(tool_content)}")
+                response_msg.append(f"{tool_name}: {str(tool_content)}")
 
         global references
         content, urls, refs = get_tool_info(tool_name, tool_content)
@@ -315,6 +344,10 @@ async def call_model(state: State, config):
                 image_url.append(url)
             logger.info(f"urls: {urls}")
 
+            if debug_mode == "Enable" and containers is not None:
+                add_notification(containers, f"Added path to image_url: {urls}")
+                response_msg.append(f"Added path to image_url: {urls}")
+
         if content:  # manupulate the output of tool message
             messages = state["messages"]
             messages[-1] = ToolMessage(
@@ -324,6 +357,12 @@ async def call_model(state: State, config):
             )
             state["messages"] = messages
 
+    if isinstance(last_message, AIMessage) and last_message.content:
+        if debug_mode == "Enable" and containers is not None:
+            containers['status'].info(get_status_msg(f"{last_message.name}"))
+            add_notification(containers, f"{last_message.content}")
+            response_msg.append(last_message.content)    
+    
     if system_prompt:
         system = system_prompt
     else:
@@ -342,7 +381,9 @@ async def call_model(state: State, config):
             "6. Produces a final response"
         )
 
-    chatModel = chat.get_chat()
+    # Use reasoning_mode with fallback to default
+    reasoning_mode = getattr(chat, 'reasoning_mode', 'Disable')
+    chatModel = chat.get_chat(extended_thinking=reasoning_mode)
     model = chatModel.bind_tools(tools)
 
     try:
@@ -371,6 +412,9 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
     messages = state["messages"]    
     last_message = messages[-1]
 
+    containers = config.get("configurable", {}).get("containers", None)
+    debug_mode = config.get("configurable", {}).get("debug_mode", "Disable")
+    
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         tool_name = last_message.tool_calls[-1]['name']
         logger.info(f"--- CONTINUE: {tool_name} ---")
@@ -379,10 +423,26 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
         if last_message.content:
             logger.info(f"last_message: {last_message.content}")
+            if debug_mode == "Enable" and containers is not None:
+                add_notification(containers, f"{last_message.content}")
+                response_msg.append(last_message.content)
+
         logger.info(f"tool_name: {tool_name}, tool_args: {tool_args}")
+        if debug_mode == "Enable" and containers is not None:
+            add_notification(containers, f"{tool_name}: {tool_args}")
         
+        if debug_mode == "Enable" and containers is not None:
+            containers['status'].info(get_status_msg(f"{tool_name}"))
+            if "code" in tool_args:
+                logger.info(f"code: {tool_args['code']}")
+                add_notification(containers, f"{tool_args['code']}")
+                response_msg.append(f"{tool_args['code']}")
+
         return "continue"
     else:
+        if debug_mode == "Enable" and containers is not None:
+            containers['status'].info(get_status_msg("end)"))
+
         logger.info(f"--- END ---")
         return "end"
 
@@ -405,6 +465,29 @@ def buildChatAgent(tools):
     workflow.add_edge("action", "agent")
 
     return workflow.compile() 
+
+def buildChatAgentWithHistory(tools):
+    tool_node = ToolNode(tools)
+
+    workflow = StateGraph(State)
+
+    workflow.add_node("agent", call_model)
+    workflow.add_node("action", tool_node)
+    workflow.add_edge(START, "agent")
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "continue": "action",
+            "end": END,
+        },
+    )
+    workflow.add_edge("action", "agent")
+
+    return workflow.compile(
+        checkpointer=chat.checkpointer,
+        store=chat.memorystore
+    )
 
 def load_multiple_mcp_server_parameters(mcp_json: dict):
     mcpServers = mcp_json.get("mcpServers")
@@ -457,7 +540,7 @@ def get_mcp_server_list():
         server_lists.append(server_name)
     return server_lists
 
-async def run_agent(query, mcp_servers):
+async def run_agent(query, mcp_servers, historyMode, containers):
     global status_msg, response_msg, image_urls, references, mcp_server_info
     status_msg = []
     response_msg = []
@@ -466,6 +549,11 @@ async def run_agent(query, mcp_servers):
 
     global index
     index = 0
+
+    debug_mode = chat.debug_mode
+
+    if debug_mode == "Enable" and containers is not None:
+        containers["status"].info(get_status_msg("(start"))
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     logger.info(f"mcp_json: {mcp_json}")        
@@ -481,12 +569,28 @@ async def run_agent(query, mcp_servers):
         tool_list = [tool.name for tool in tools]
         logger.info(f"tool_list: {tool_list}")
 
-        app = buildChatAgent(tools)
-        config = {
-            "recursion_limit": 50,
-            "tools": tools,
-            "system_prompt": None
-        }
+        if debug_mode == "Enable":    
+            containers["tools"].info(f"Tools: {tool_list}")
+                    
+        if historyMode == "Enable":
+            app = buildChatAgentWithHistory(tools)
+            config = {
+                "recursion_limit": 50,
+                "configurable": {"thread_id": chat.userId},
+                "containers": containers,
+                "tools": tools,
+                "system_prompt": None,
+                "debug_mode": debug_mode
+            }
+        else:
+            app = buildChatAgent(tools)
+            config = {
+                "recursion_limit": 50,
+                "containers": containers,
+                "tools": tools,
+                "system_prompt": None,
+                "debug_mode": debug_mode
+            }
         
         inputs = {
             "messages": [HumanMessage(content=query)]
@@ -524,5 +628,65 @@ async def run_agent(query, mcp_servers):
         logger.info(f"result: {result}")       
         logger.info(f"image_url: {image_url}")
 
+        if containers is not None:
+            containers['notification'][index-1].markdown(result)
+    
     return result, image_url
+
+async def run_task(question, tools, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
+    global status_msg, response_msg, references, image_urls
+    status_msg = previous_status_msg
+    response_msg = previous_response_msg
+
+    debug_mode = chat.debug_mode
+
+    if debug_mode == "Enable" and containers is not None:
+        containers["status"].info(get_status_msg("(start"))
+
+    if historyMode == "Enable":
+        app = buildChatAgentWithHistory(tools)
+        config = {
+            "recursion_limit": 50,
+            "configurable": {"thread_id": chat.userId},
+            "containers": containers,
+            "tools": tools,
+            "system_prompt": system_prompt,
+            "debug_mode": debug_mode
+        }
+    else:
+        app = buildChatAgent(tools)
+        config = {
+            "recursion_limit": 50,
+            "containers": containers,
+            "tools": tools,
+            "system_prompt": system_prompt,
+            "debug_mode": debug_mode
+        }
+
+    value = None
+    inputs = {
+        "messages": [HumanMessage(content=question)]
+    }
+
+    final_output = None
+    async for output in app.astream(inputs, config):
+        for key, value in output.items():
+            logger.info(f"--> key: {key}, value: {value}")
+            
+            if key == "messages" or key == "agent":
+                if isinstance(value, dict) and "messages" in value:
+                    final_output = value
+                elif isinstance(value, list):
+                    final_output = {"messages": value, "image_url": []}
+                else:
+                    final_output = {"messages": [value], "image_url": []}
+                
+    if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
+        result = final_output["messages"][-1].content
+    else:
+        result = "답변을 찾지 못하였습니다."
+
+    image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
+
+    return result, image_url, status_msg, response_msg
 

@@ -45,10 +45,10 @@ numberOfDocs = 4
 
 MSG_LENGTH = 100    
 
+# Default model
 model_name = "Claude 3.5 Sonnet"
 model_type = "claude"
 models = info.get_model_info(model_name)
-number_of_models = len(models)
 model_id = models[0]["model_id"]
 
 aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
@@ -56,7 +56,33 @@ aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
 aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
 aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
-def get_chat():
+# Default reasoning mode
+reasoning_mode = 'Disable'
+debug_mode = 'Disable'
+
+def update(modelName, debugMode):
+    global model_name, models, model_type, model_id, debug_mode
+
+    if modelName is not model_name:
+        model_name = modelName
+        logger.info(f"modelName: {modelName}")
+
+        models = info.get_model_info(model_name)
+        model_type = models[0]["model_type"]
+        model_id = models[0]["model_id"]
+        logger.info(f"model_id: {model_id}")
+        logger.info(f"model_type: {model_type}")
+    
+    if debugMode is not debug_mode:
+        debug_mode = debugMode
+        logger.info(f"debugMode: {debugMode}")
+
+def get_chat(extended_thinking=None):
+    # Set default value if not provided or invalid
+    if extended_thinking is None or extended_thinking not in ['Enable', 'Disable']:
+        extended_thinking = 'Disable'
+
+    logger.info(f"model_name: {model_name}")
     profile = models[0]
     bedrock_region =  profile['bedrock_region']
     modelId = profile['model_id']
@@ -91,13 +117,28 @@ def get_chat():
             )
         )
     
-    parameters = {
-        "max_tokens":maxOutputTokens,     
-        "temperature":0.1,
-        "top_k":250,
-        "top_p":0.9,
-        "stop_sequences": [STOP_SEQUENCE]
-    }
+    if extended_thinking=='Enable':
+        maxReasoningOutputTokens=64000
+        logger.info(f"extended_thinking: {extended_thinking}")
+        thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens-1000)
+
+        parameters = {
+            "max_tokens":maxReasoningOutputTokens,
+            "temperature":1,            
+            "thinking": {
+                "type": "enabled",
+                "budget_tokens": thinking_budget
+            },
+            "stop_sequences": [STOP_SEQUENCE]
+        }
+    else:
+        parameters = {
+            "max_tokens":maxOutputTokens,     
+            "temperature":0.1,
+            "top_k":250,
+            "top_p":0.9,
+            "stop_sequences": [STOP_SEQUENCE]
+        }
 
     chat = ChatBedrock(   # new chat model
         model_id=modelId,

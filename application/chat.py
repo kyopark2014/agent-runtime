@@ -4,6 +4,7 @@ import uuid
 import os
 import logging
 import sys
+import requests
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -32,10 +33,11 @@ accountId = config['accountId']
 projectName = config['projectName']
 agent_runtime_arn = config['agent_runtime_arn']
 
-def run_agent(prompt, mcp_servers):
+def run_agent(prompt, mcp_servers, model_name):
     payload = json.dumps({
         "prompt": prompt,
-        "mcp_servers": mcp_servers
+        "mcp_servers": mcp_servers,
+        "model_name": model_name
     })
 
     agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
@@ -51,3 +53,61 @@ def run_agent(prompt, mcp_servers):
     logger.info(f"Agent Response: {response_data}")
 
     return response_data.get("result", "")
+
+def run_agent_in_docker(prompt, mcp_servers, model_name):
+    payload = json.dumps({
+        "prompt": prompt,
+        "mcp_servers": mcp_servers,
+        "model_name": model_name,
+    })
+
+    headers = {
+        "Content-Type": "application/json"
+    }   
+    destination = f"http://localhost:8080/invocations"
+
+    try:
+        logger.info(f"Sending request to Docker container at {destination}")
+        logger.info(f"Payload: {payload}")
+        
+        response = requests.post(destination, headers=headers, data=payload, timeout=30)
+        
+        logger.info(f"Response status code: {response.status_code}")
+        logger.info(f"Response headers: {response.headers}")
+        logger.info(f"Response text: {response.text}")
+        
+        if response.status_code != 200:
+            error_msg = f"Docker container returned status code {response.status_code}: {response.text}"
+            logger.error(error_msg)
+            return f"Error: {error_msg}"
+        
+        if not response.text.strip():
+            error_msg = "Docker container returned empty response"
+            logger.error(error_msg)
+            return f"Error: {error_msg}"
+        
+        response_data = response.json()
+        logger.info(f"Agent Response: {response_data}")
+
+        return response_data.get("result", "")
+        
+    except requests.exceptions.ConnectionError as e:
+        error_msg = f"Docker container connection failed: {str(e)}"
+        logger.error(error_msg)
+        return f"Error: Docker container is not running or not accessible at {destination}. Please start the Docker container first."
+        
+    except requests.exceptions.Timeout as e:
+        error_msg = f"Request timeout: {str(e)}"
+        logger.error(error_msg)
+        return f"Error: {error_msg}"
+        
+    except json.JSONDecodeError as e:
+        error_msg = f"Invalid JSON response from Docker container: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Raw response: {response.text}")
+        return f"Error: {error_msg}"
+        
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        logger.error(error_msg)
+        return f"Error: {error_msg}"
