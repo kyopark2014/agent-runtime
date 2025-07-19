@@ -19,19 +19,23 @@ def load_config():
     config = None
     
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "..", "agent", "config.json")
+    config_path = os.path.join(script_dir, "..", 'langgraph', "config.json")
     
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
-    
-    return config
 
-config = load_config()
+    arn_path = os.path.join(script_dir, "..", 'langgraph', "agent_runtime_arn.json")
+    with open(arn_path, "r", encoding="utf-8") as f:
+        agent_runtime_arn = json.load(f)['agent_runtime_arn']
+        logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
+    
+    return config, agent_runtime_arn
+
+config, agent_runtime_arn = load_config()
 
 bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
-agent_runtime_arn = config['agent_runtime_arn']
 
 def run_agent(prompt, mcp_servers, model_name):
     payload = json.dumps({
