@@ -51,8 +51,7 @@ RUN echo "[default]" > /root/.aws/config && \
 WORKDIR /app
 
 # Core dependencies
-RUN pip install --upgrade boto3>=1.40.0
-RUN pip install --upgrade botocore>=1.40.0
+RUN pip install boto3 botocore
 RUN pip install langchain_aws langchain langchain_community langchain_experimental langgraph
 RUN pip install mcp langchain-mcp-adapters==0.0.9
 RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv
