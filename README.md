@@ -6,6 +6,8 @@ bedrock-agentcore:GetAgentRuntime 퍼미션이 필요합니다.
 
 ## 주요 구현
 
+AgentCore를 Docker를 이용합니다. 현재(2025.7)는 arm64와 1GB 이하의 docker image를 지원합니다.
+
 ### Local Test
 
 #### 동작 테스트
