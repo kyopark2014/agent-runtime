@@ -8,6 +8,73 @@ bedrock-agentcore:GetAgentRuntime 퍼미션이 필요합니다.
 
 AgentCore를 Docker를 이용합니다. 현재(2025.7)는 arm64와 1GB 이하의 docker image를 지원합니다.
 
+### AgentCore에 배포하기
+
+LangGraph와 strands agent를 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./langgraph/push-to-ecr.sh)를 이용합니다.
+
+```text
+./push-to-ecr.sh
+```
+
+이후, 아래와 같이 [create_agent_runtime.py](./langgraph/create_agent_runtime.py)를 이용해 AgentCore에 배포합니다.
+
+```text
+python create_agent_runtime.py
+```
+
+[create_agent_runtime.py](./langgraph/create_agent_runtime.py)에서는 AgentCore에 처음으로 배포하는지 확인하여 아래와 같이 runtime을 생성합니다.
+
+```python
+response = client.create_agent_runtime(
+    agentRuntimeName=runtime_name,
+    agentRuntimeArtifact={
+        'containerConfiguration': {
+            'containerUri': f"{accountId}.dkr.ecr.{aws_region}.amazonaws.com/{repositoryName}:{imageTags}"
+        }
+    },
+    networkConfiguration={"networkMode":"PUBLIC"}, 
+    roleArn=agent_runtime_role
+)
+agentRuntimeArn = response['agentRuntimeArn']
+```
+
+기존에 runtime이 있는지는 아래와 같이 [list_agent_runtimes](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/list_agent_runtimes.html)을 이용해 확인합니다. 
+
+```python
+client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
+response = client.list_agent_runtimes()
+
+isExist = False
+agentRuntimeId = None
+agentRuntimes = response['agentRuntimes']
+targetAgentRuntime = repositoryName
+if len(agentRuntimes) > 0:
+    for agentRuntime in agentRuntimes:
+        agentRuntimeName = agentRuntime['agentRuntimeName']
+        if agentRuntimeName == targetAgentRuntime:
+            agentRuntimeId = agentRuntime['agentRuntimeId']
+            isExist = True        
+            break
+```
+
+이미 runtime이 있다면 아래와 같이 [update_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/update_agent_runtime.html)을 이용해 업데이트 합니다.
+
+```python
+response = client.update_agent_runtime(
+    agentRuntimeId=agentRuntimeId,
+    description="Update agent runtime",
+    agentRuntimeArtifact={
+        'containerConfiguration': {
+            'containerUri': f"{accountId}.dkr.ecr.{aws_region}.amazonaws.com/{targetAgentRuntime}:{imageTags}"
+        }
+    },
+    roleArn=agent_runtime_role,
+    networkConfiguration={"networkMode":"PUBLIC"},
+    protocolConfiguration={"serverProtocol":"HTTP"}
+)
+```
+
+
 ### Local Test
 
 #### 동작 테스트
