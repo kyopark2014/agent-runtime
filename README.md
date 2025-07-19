@@ -74,7 +74,7 @@ response = client.update_agent_runtime(
 )
 ```
 
-## 동작 테스트
+## 실행하기
 
 ### Local에서 동작 확인
 
@@ -147,9 +147,7 @@ response = requests.post(destination, headers=headers, data=payload, timeout=300
 sudo docker logs coreagent-langgraph-container
 ```
 
-## 실행하기
-
-### 환경 준비
+### Agent 지원 서비스 설치
 
 Agent의 동작 테스트를 위해 S3, CloudFront, OpenSearch (Serverless), Bedrock Knowledge Base이 필요합니다. 이를 위한 상세 내용은 [cdk-agentcore](./cdk-agentcore/lib/cdk-agentcore-stack.ts)을 참조합니다. 이를 인프라로 배포할 때에는 아래와 같이 수행합니다.
 
