@@ -94,11 +94,10 @@ with st.sidebar:
         ("Nova Premier", 'Nova Pro', 'Nova Lite', 'Nova Micro', 'Claude 4 Opus', 'Claude 4 Sonnet', 'Claude 3.7 Sonnet', 'Claude 3.5 Sonnet', 'Claude 3.0 Sonnet', 'Claude 3.5 Haiku'), index=7
     )
 
-    # model selection box    
-    platform = st.selectbox(
-        '🖊️ 사용 플렛폼을 선택하세요',
-        ("Docker", 'AgentCore'), index=1
-    )
+    # platform selection box
+    platform = st.radio(
+        label="사용 플렛폼을 선택하세요. ",options=["AgentCore","Docker"], index=1
+    )   
 
     if platform == 'AgentCore':
         agent_type = st.radio(
