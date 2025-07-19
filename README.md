@@ -129,7 +129,7 @@ Streamlit에서 아래와 같이 "Docker"를 선택하면, local의 docker를 �
 
 <img width="195" height="95" alt="image" src="https://github.com/user-attachments/assets/f0bc2385-30d4-4486-b002-a3ff25928802" />
 
-Docker 실행하면, [chat.py](./application/chat.py)와 같이 "http://localhost:8080/invocations"로 요청을 보내서 응답을 확인합니다.
+"Docker"를 선택하면, [chat.py](./application/chat.py)와 같이 "http://localhost:8080/invocations"로 요청을 보내서 응답을 확인합니다.
 
 ```python
 import requests
