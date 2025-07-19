@@ -138,7 +138,7 @@ payload = json.dumps({
 })
 headers = {"Content-Type": "application/json"}   
 destination = f"http://localhost:8080/invocations"
-response = requests.post(destination, headers=headers, data=payload, timeout=30)
+response = requests.post(destination, headers=headers, data=payload, timeout=300)
 ```
 
 문제 발생시 Docker 로그를 아래와 같이 확인합니다.
