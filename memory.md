@@ -16,6 +16,21 @@ for memory in memories:
     logger.info("--------------------------------------------------------------------")
 ```
 
+이때의 조회결과는 아래와 같습니다. 여기서 memory의 id가 대화 내용을 저장하거나 읽어올 때에 활용됩니다.
+
+```java
+[
+   {
+      "arn":"arn:aws:bedrock-agentcore:us-west-2:262976740991:memory/LangGraph-VMvQCK89aW",
+      "id":"LangGraph-VMvQCK89aW",
+      "status":"ACTIVE",
+      "createdAt":datetime.datetime(2025,7,20,23,23,51,557000,"tzinfo=tzlocal())",
+      "updatedAt":datetime.datetime(2025,7,20,23,23,51,557000,"tzinfo=tzlocal())",
+      "memoryId":"LangGraph-VMvQCK89aW"
+   }
+]
+```
+
 메모리가 없다면 아래와 같이 생성합니다.
 
 ```python
@@ -42,6 +57,21 @@ memory_result = memory_client.create_event(
     ]
 )
 logger.info(f"result of save conversation to memory: {memory_result}")
+```
+
+저장시 아래와 같을 결과로 리턴합니다.
+
+```java
+{
+   "memoryId":"LangGraph-VMvQCK89aW",
+   "actorId":"LangGraph",
+   "sessionId":"LangGraph",
+   "eventId":"0000001753022422000#5f585a3e",
+   "eventTimestamp":datetime.datetime(2025,7,20,23,40,22,"tzinfo=tzlocal())",
+   "branch":{
+      "name":"main"
+   }
+}
 ```
 
 저장된 대화 내용을 아래와 같이 조회할 수 있습니다.
