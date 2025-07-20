@@ -13,7 +13,7 @@ bedrock-agentcore:GetAgentRuntime 퍼미션이 필요합니다.
 <img width="862" height="428" alt="image" src="https://github.com/user-attachments/assets/e01e4c99-869d-435c-a573-9468311ada73" />
 
 
-AgentCore를 Docker를 이용합니다. 현재(2025.7)는 arm64와 1GB 이하의 docker image를 지원합니다.
+AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.7) 기준으로 arm64와 1GB 이하의 docker image를 지원합니다.
 
 ### AgentCore에 배포하기
 
