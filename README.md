@@ -22,7 +22,7 @@ AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.
 - AgentCore Code Interpreter: 분리된 sandbox 환경에서 안전하게 코드를 실행할 수 있습니다.
 - AgentCore Broswer: 브라우저를 이용해 빠르고 안전하게 웹크롤링과 같은 작업을 수행할 수 있습니다.
 - AgentCore Gateway: API, Lambda를 비롯한 서비스들을 쉽게 Tool로 활용할 수 있습니다.
-- AgentCore Observability: 상용환경에서 개발자가 agent의 동작을 trace, debug, monitor 할 수 있습니다.
+- AgentCore Observability: 상용 환경에서 개발자가 agent의 동작을 trace, debug, monitor 할 수 있습니다.
 
 ### AgentCore에 배포하기
 
