@@ -90,7 +90,7 @@ response = client.update_agent_runtime(
 )
 ```
 
-## 실행하기
+## 배포 및 실행하기
 
 ### Local에서 동작 확인
 
