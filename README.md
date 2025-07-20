@@ -15,7 +15,7 @@ bedrock-agentcore:GetAgentRuntime 퍼미션이 필요합니다.
 
 AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.7) 기준으로 arm64와 1GB 이하의 docker image를 지원합니다.
 
-### AgentCore
+### AgentCore 소개
 
 - AgentCore Runtime: AI agent와 tool을 배포하고 트래픽에 따라 자동으로 확장(Scaling)이 가능한 serverless runtime입니다. LangGraph, CrewAI, Strands Agents를 포함한 다양한 오픈소스 프레임워크을 지원합니다. 빠른 cold start, 세션 격리, 내장된 신원 확인(built-in identity), multimodal payload를 지원합니다. 이를 통해 안전하고 빠른 출시가 가능합니다.
 - AgentCore Memory: Agent가 편리하게 short term, long term 메모리를 관리할 수 있습니다.
