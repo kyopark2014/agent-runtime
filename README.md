@@ -1,8 +1,6 @@
 # AgentCore를 이용해 Agent 배포하기
 
-여기에서는 AgentCore를 이용해 LangGraph로 만든 Agent를 사용하는 방법에 대해 설명합니다.
-
-bedrock-agentcore:GetAgentRuntime 퍼미션이 필요합니다.
+여기에서는 AgentCore를 이용해 LangGraph, Strands로 만든 Agent를 배포하고 안전하게 사용하는 방법에 대해 설명합니다.
 
 ## 주요 구현
 
