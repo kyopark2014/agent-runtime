@@ -17,13 +17,13 @@ AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.
 
 ### AgentCore에 배포하기
 
-LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./langgraph/push-to-ecr.sh)를 이용합니다.
+LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./langgraph/push-to-ecr.sh)를 이용하면 손쉽게 배포할 수 있습니다.
 
 ```text
 ./push-to-ecr.sh
 ```
 
-이후, 아래와 같이 [create_agent_runtime.py](./langgraph/create_agent_runtime.py)를 이용해 AgentCore에 배포합니다.
+이후, 아래와 같이 [create_agent_runtime.py](./langgraph/create_agent_runtime.py)를 이용해 AgentCore에 runtime으로 배포합니다.
 
 ```text
 python create_agent_runtime.py
