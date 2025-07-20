@@ -1,4 +1,4 @@
-# AgentCore를 이용해 Agent 배포하기
+# AgentCore를 이용해 Agent 활용하기
 
 여기에서는 AgentCore를 이용해 LangGraph, Strands로 만든 Agent를 배포하고 안전하게 사용하는 방법에 대해 설명합니다.
 
