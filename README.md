@@ -211,6 +211,17 @@ streamlit run application/app.py
 <img width="1330" height="847" alt="image" src="https://github.com/user-attachments/assets/50cda7f5-3cd2-4a21-8c36-c0d8272fad2a" />
 
 
+## 실행 결과
+
+MCP server에서 "use_aws"를 선택하고, "내 cloudwatch 로그 리스트는?"라고 입력하면 AWS CLI를 이용해 AWS cloudwatch의 로그 리스트를 확인하여 아래와 같이 보여줍니다.
+
+<img width="724" height="732" alt="image" src="https://github.com/user-attachments/assets/58191496-eee0-4dbb-ab9a-7ddb71340e69" />
+
+"tavily search"를 선택하고, "강남역 맛집은?"이라고 검색하면 아래와 같이 강남역에 대한 정보를 검색하여 얻어진 결과를 보여줍니다.
+
+<img width="723" height="662" alt="image" src="https://github.com/user-attachments/assets/cbb1241d-8f17-4894-a43c-2d578e2987e2" />
+
+
 
 ## Reference 
 
