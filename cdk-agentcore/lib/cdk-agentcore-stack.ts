@@ -443,6 +443,18 @@ export class CdkAgentcoreStack extends cdk.Stack {
         'eks:ListFargateProfiles'
       ]
     }));
+
+    agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      resources: ['*'],
+      actions: [
+        'cloudwatch:ListMetrics', 
+        'cloudwatch:GetMetricData',
+        'cloudwatch:GetMetricStatistics',
+        'cloudwatch:GetMetricWidgetImage',
+        'cloudwatch:GetMetricData',
+        'cloudwatch:GetMetricData',
+      ]
+    }));
     
     const environment = {
       "projectName": projectName,

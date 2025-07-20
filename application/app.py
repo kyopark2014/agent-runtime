@@ -105,14 +105,15 @@ with st.sidebar:
         agent_type = st.radio(
             label="Agent 타입을 선택하세요. ",options=["LangGraph", "Strands"], index=0
         )
+    
+    uploaded_file = None
+    st.subheader("📋 문서 업로드")
+    uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
     st.success(f"Connected to {modelName}", icon="💚")
     clear_button = st.button("대화 초기화", key="clear")
     # logger.info(f"clear_button: {clear_button}")
 
-    uploaded_file = None
-    st.subheader("📋 문서 업로드")
-    uploaded_file = st.file_uploader("RAG를 위한 파일을 선택합니다.", type=["pdf", "txt", "py", "md", "csv", "json"], key=chat.fileId)
 
 st.title('🔮 '+ mode)
 
