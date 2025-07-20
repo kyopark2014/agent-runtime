@@ -185,7 +185,7 @@ if clear_button or "messages" not in st.session_state:
     uploaded_file = None
     
     st.session_state.greetings = False
-    chat.clear_chat_history()
+    chat.initiate()
     st.rerun()    
 
 # Always show the chat input
@@ -209,9 +209,9 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 logger.info(f"mcp_servers: {mcp_servers}")
 
                 if platform == 'AgentCore':
-                    response = chat.run_agent(prompt, agent_type, mcp_servers, modelName)
+                    response = chat.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName)
                 else:
-                    response = chat.run_agent_in_docker(prompt, mcp_servers, modelName)
+                    response = chat.run_agent_in_docker(prompt, history_mode,mcp_servers, modelName)
 
                 st.markdown(response)
 

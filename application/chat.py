@@ -76,6 +76,18 @@ path = config["sharing_url"] if "sharing_url" in config else None
 if path is None:
     raise Exception ("No Sharing URL")
 
+runtime_session_id = str(uuid.uuid4())
+logger.info(f"runtime_session_id: {runtime_session_id}")
+user_id = runtime_session_id 
+logger.info(f"user_id: {user_id}")
+
+def initiate():
+    global runtime_session_id
+    runtime_session_id=str(uuid.uuid4())
+    logger.info(f"runtime_session_id: {runtime_session_id}")
+
+debug_mode = 'Disable'
+
 def update(modelName):
     global model_name, models, model_type, model_id
 
@@ -654,11 +666,13 @@ def get_summary_of_uploaded_file(file_name, st):
 
     return msg
 
-def run_agent(prompt, agent_type, mcp_servers, model_name):
+def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
     payload = json.dumps({
         "prompt": prompt,
         "mcp_servers": mcp_servers,
-        "model_name": model_name
+        "model_name": model_name,
+        "user_id": user_id,
+        "history_mode": history_mode
     })
 
     if agent_type == 'LangGraph':
@@ -671,7 +685,7 @@ def run_agent(prompt, agent_type, mcp_servers, model_name):
     agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
     response = agent_core_client.invoke_agent_runtime(
         agentRuntimeArn=agent_runtime_arn,
-        runtimeSessionId=str(uuid.uuid4()),
+        runtimeSessionId=runtime_session_id,
         payload=payload,
         qualifier="DEFAULT"
     )
@@ -682,11 +696,12 @@ def run_agent(prompt, agent_type, mcp_servers, model_name):
 
     return response_data.get("result", "")
 
-def run_agent_in_docker(prompt, mcp_servers, model_name):
+def run_agent_in_docker(prompt, history_mode, mcp_servers, model_name):
     payload = json.dumps({
         "prompt": prompt,
         "mcp_servers": mcp_servers,
         "model_name": model_name,
+        "history_mode": history_mode
     })
 
     headers = {

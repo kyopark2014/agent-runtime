@@ -54,9 +54,14 @@ def langgraph_bedrock(payload):
     model_name = payload.get("model_name")
     logger.info(f"model_name: {model_name}")
 
+    user_id = payload.get("user_id")
+    logger.info(f"user_id: {user_id}")
+
     debug_mode = 'Disable'
-    chat.update(modelName=model_name, debugMode=debug_mode)
-    history_mode = 'Disable'
+    chat.update(modelName=model_name, debugMode=debug_mode, userId=user_id)
+
+    history_mode = payload.get("history_mode")
+    logger.info(f"history_mode: {history_mode}")
 
     response, image_url = asyncio.run(langgraph_agent.run_agent(
         query=user_message, 

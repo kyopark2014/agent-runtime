@@ -12,6 +12,8 @@ from botocore.config import Config
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.docstore.document import Document
 from tavily import TavilyClient  
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.store.memory import InMemoryStore
 
 import logging
 import sys
@@ -56,12 +58,20 @@ aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
 aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
 aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 
+checkpointers = dict() 
+memorystores = dict() 
+
+user_id = None
+checkpointer = MemorySaver()
+memorystore = InMemoryStore()
+
 # Default reasoning mode
 reasoning_mode = 'Disable'
 debug_mode = 'Disable'
 
-def update(modelName, debugMode):
-    global model_name, models, model_type, model_id, debug_mode
+def update(modelName, debugMode, userId):
+    global model_name, models, model_type, model_id, debug_mode, user_id
+    global checkpointer, memorystore
 
     if modelName is not model_name:
         model_name = modelName
@@ -76,6 +86,19 @@ def update(modelName, debugMode):
     if debugMode is not debug_mode:
         debug_mode = debugMode
         logger.info(f"debugMode: {debugMode}")
+
+    if userId is not user_id:
+        user_id = userId
+        logger.info(f"user_id: {user_id}")
+
+        if "userId" in checkpointers:
+            checkpointer = checkpointers[user_id]
+            memorystore = memorystores[user_id]
+        else:
+            checkpointer = MemorySaver()
+            memorystore = InMemoryStore()
+            checkpointers[user_id] = checkpointer
+            memorystores[user_id] = memorystore
 
 def get_chat(extended_thinking=None):
     # Set default value if not provided or invalid

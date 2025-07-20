@@ -16,15 +16,6 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install commonly used MCP npm packages to avoid warnings
-RUN npm install -g @modelcontextprotocol/server-filesystem@latest \
-    && npm install -g @modelcontextprotocol/server-puppeteer@latest \
-    && npm install -g mcp-server-text-editor@latest \
-    && npm install -g @upstash/context7-mcp@latest \
-    && npm install -g @openbnb/mcp-server-airbnb@latest \
-    && npm install -g @playwright/mcp@latest \
-    && npm install -g @smithery/cli@latest
-
 # Install AWS CLI for ARM64
 RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip" \
     && unzip awscliv2.zip \

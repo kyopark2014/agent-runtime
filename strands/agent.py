@@ -56,7 +56,10 @@ def langgraph_bedrock(payload):
 
     debug_mode = 'Disable'
     chat.update(modelName=model_name, debugMode=debug_mode)
-    history_mode = 'Disable'
+
+    history_mode = payload.get("history_mode")
+    logger.info(f"history_mode: {history_mode}")
+
     response, image_url = asyncio.run(strands_agent.run_agent(
         question=user_message, 
         strands_tools=[], 
