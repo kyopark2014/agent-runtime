@@ -78,8 +78,7 @@ if path is None:
 
 runtime_session_id = str(uuid.uuid4())
 logger.info(f"runtime_session_id: {runtime_session_id}")
-user_id = runtime_session_id 
-logger.info(f"user_id: {user_id}")
+user_id = None 
 
 def initiate():
     global runtime_session_id
@@ -428,7 +427,6 @@ def load_document(file_type, s3_file_name):
     
     return texts
 
-
 def summary_image(img_base64, instruction):      
     llm = get_chat(extended_thinking="Disable")
 
@@ -667,6 +665,9 @@ def get_summary_of_uploaded_file(file_name, st):
     return msg
 
 def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
+    user_id = agent_type # for testing
+    logger.info(f"user_id: {user_id}")
+
     payload = json.dumps({
         "prompt": prompt,
         "mcp_servers": mcp_servers,
@@ -701,6 +702,7 @@ def run_agent_in_docker(prompt, history_mode, mcp_servers, model_name):
         "prompt": prompt,
         "mcp_servers": mcp_servers,
         "model_name": model_name,
+        "user_id": user_id,
         "history_mode": history_mode
     })
 
