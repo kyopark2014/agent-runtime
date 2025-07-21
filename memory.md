@@ -44,6 +44,28 @@ if len(memories) == 0:
     logger.info(f"result: {result}")
 ```
 
+메모리 생성시의 결과입니다.
+
+```java
+{
+   "arn":"arn:aws:bedrock-agentcore:us-west-2:262976740991:memory/agentcore_strands-HuPfmNFtZM",
+   "id":"LangGraph-HuPfmNFtZM",
+   "name":"LangGraph",
+   "description":"LangGraph Memory",
+   "eventExpiryDuration":7,
+   "status":"ACTIVE",
+   "createdAt":datetime.datetime(2025,7,21,12,56,28,854000,"tzinfo=tzlocal())",
+   "updatedAt":datetime.datetime(2025,7,21,12,56,28,854000,"tzinfo=tzlocal())",
+   "strategies":[
+      
+   ],
+   "memoryId":"agentcore_strands-HuPfmNFtZM",
+   "memoryStrategies":[
+      
+   ]
+}
+```
+
 대화 내용은 아래와 같이 저장할 수 있습니다.
 
 ```python
