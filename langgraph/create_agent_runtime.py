@@ -3,6 +3,8 @@ import utils
 import json
 import os
 
+from bedrock_agentcore.memory import MemoryClient
+
 projectName = utils.projectName
 aws_region = utils.bedrock_region
 agent_runtime_role = utils.agent_runtime_role
@@ -51,8 +53,12 @@ if len(agentRuntimes) > 0:
 def create_agent_runtime():
     runtime_name = targetAgentRuntime
     print(f"create agent runtime!")    
-    print(f"Trying to create: {runtime_name}")
+    print(f"Trying to create agent: {runtime_name}")
+
+    # create agent runtime
+    agentRuntimeArn = None
     try:        
+        # create agent runtime
         response = client.create_agent_runtime(
             agentRuntimeName=runtime_name,
             agentRuntimeArtifact={
@@ -63,22 +69,58 @@ def create_agent_runtime():
             networkConfiguration={"networkMode":"PUBLIC"}, 
             roleArn=agent_runtime_role
         )
-        print(f"response: {response}")
+        print(f"response of create agent runtime: {response}")
 
         agentRuntimeArn = response['agentRuntimeArn']
         print(f"agentRuntimeArn: {agentRuntimeArn}")
 
-        # save agentRuntimeArn to json file
-        fname = 'agent_runtime_arn.json'
-        config = {
-            "agent_runtime_arn": agentRuntimeArn
-        }
+    except client.exceptions.ConflictException as e:
+        print(f"[ERROR] ConflictException: {e}")
+
+    # create memory
+    print(f"create agent memory!")    
+    print(f"Trying to create memory: {runtime_name}")
+
+    memoryId = None
+    try:
+        memory_client = MemoryClient(region_name=aws_region)
+        memories = memory_client.list_memories()
+        print(f"memories: {memories}")
+
+        result = memory_client.create_memory(
+            name=runtime_name,
+            description=f"Memory for {runtime_name}",
+            event_expiry_days=7, # 7 - 365 days
+            # memory_execution_role_arn=memory_execution_role_arn
+        )
+        print(f"result of create memory: {result}") 
+        
+        if "memoryId" in result:
+            memoryId = result['memoryId']
+            print(f"memoryId: {memoryId}")
+        else:
+            print(f"memoryId is not found")
+            
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        pass   
+
+    try:
+        fname = 'agentcore.json'
+        with open(fname, 'r') as f:
+            config = json.load(f)
+        
+        if agentRuntimeArn is not None:
+            config['agent_runtime_arn'] = agentRuntimeArn
+        if memoryId is not None:
+            config['memory_id'] = memoryId
+            
         with open(fname, 'w') as f:
             json.dump(config, f)
         print(f"{fname} updated")
-    
-    except client.exceptions.ConflictException as e:
-        print(f"[ERROR] ConflictException: {e}")
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        pass   
 
 def update_agent_runtime():
     print(f"update agent runtime: {targetAgentRuntime}")

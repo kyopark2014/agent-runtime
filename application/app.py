@@ -101,10 +101,9 @@ with st.sidebar:
         label="사용 플렛폼을 선택하세요. ",options=["AgentCore","Docker"], index=0
     )   
 
-    if platform == 'AgentCore':
-        agent_type = st.radio(
-            label="Agent 타입을 선택하세요. ",options=["LangGraph", "Strands"], index=0
-        )
+    agent_type = st.radio(
+        label="Agent 타입을 선택하세요. ",options=["LangGraph", "Strands"], index=0
+    )
     
     uploaded_file = None
     st.subheader("📋 문서 업로드")
@@ -212,7 +211,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 if platform == 'AgentCore':
                     response = chat.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName)
                 else:
-                    response = chat.run_agent_in_docker(prompt, history_mode,mcp_servers, modelName)
+                    response = chat.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName)
 
                 st.markdown(response)
 

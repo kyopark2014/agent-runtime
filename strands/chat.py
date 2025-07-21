@@ -59,9 +59,10 @@ aws_region = os.environ.get('AWS_DEFAULT_REGION', 'us-west-2')
 # Default reasoning mode
 reasoning_mode = 'Disable'
 debug_mode = 'Disable'
+user_id = None
 
-def update(modelName, debugMode):
-    global model_name, models, model_type, model_id, debug_mode
+def update(modelName, debugMode, userId):
+    global model_name, models, model_type, model_id, debug_mode, user_id
 
     if modelName is not model_name:
         model_name = modelName
@@ -76,6 +77,10 @@ def update(modelName, debugMode):
     if debugMode is not debug_mode:
         debug_mode = debugMode
         logger.info(f"debugMode: {debugMode}")
+
+    if userId is not user_id:
+        user_id = userId
+        logger.info(f"user_id: {user_id}")
 
 def get_chat(extended_thinking=None):
     # Set default value if not provided or invalid

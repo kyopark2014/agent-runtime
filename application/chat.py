@@ -22,6 +22,7 @@ from botocore.config import Config
 from langchain.docstore.document import Document
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from bedrock_agentcore.memory import MemoryClient
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -41,19 +42,27 @@ def load_config():
     with open(config_path, "r", encoding="utf-8") as f:
         config = json.load(f)
 
-    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph', "agent_runtime_arn.json")
+    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph', "agentcore.json")
     with open(langgraph_arn_path, "r", encoding="utf-8") as f:
-        langgraph_agent_runtime_arn = json.load(f)['agent_runtime_arn']
+        langgraph_data = json.load(f)
+        langgraph_agent_runtime_arn = langgraph_data['agent_runtime_arn']
         logger.info(f"langgraph_agent_runtime_arn: {langgraph_agent_runtime_arn}")
-    
-    strands_arn_path = os.path.join(script_dir, "..", 'strands', "agent_runtime_arn.json")
-    with open(strands_arn_path, "r", encoding="utf-8") as f:
-        strands_agent_runtime_arn = json.load(f)['agent_runtime_arn']
-        logger.info(f"strands_agent_runtime_arn: {strands_agent_runtime_arn}")
-    
-    return config, langgraph_agent_runtime_arn, strands_agent_runtime_arn
 
-config, langgraph_agent_runtime_arn, strands_agent_runtime_arn = load_config()
+        langgraph_memory_id = langgraph_data['memory_id']
+        logger.info(f"langgraph_memory_id: {langgraph_memory_id}")
+    
+    strands_arn_path = os.path.join(script_dir, "..", 'strands', "agentcore.json")
+    with open(strands_arn_path, "r", encoding="utf-8") as f:
+        strands_data = json.load(f)
+        strands_agent_runtime_arn = strands_data['agent_runtime_arn']
+        logger.info(f"strands_agent_runtime_arn: {strands_agent_runtime_arn}")
+
+        strands_memory_id = strands_data['memory_id']
+        logger.info(f"strands_memory_id: {strands_memory_id}")
+    
+    return config, langgraph_agent_runtime_arn, langgraph_memory_id, strands_agent_runtime_arn, strands_memory_id
+
+config, langgraph_agent_runtime_arn, langgraph_memory_id, strands_agent_runtime_arn, strands_memory_id = load_config()
 
 bedrock_region = config['region']
 accountId = config['accountId']
@@ -678,11 +687,14 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
 
     if agent_type == 'LangGraph':
         agent_runtime_arn = langgraph_agent_runtime_arn
+        memory_id = langgraph_memory_id
     else: 
         agent_runtime_arn = strands_agent_runtime_arn
+        memory_id = strands_memory_id
 
     logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
-
+    logger.info(f"memory_id: {memory_id}")
+    
     agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
     response = agent_core_client.invoke_agent_runtime(
         agentRuntimeArn=agent_runtime_arn,
@@ -695,9 +707,35 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
     response_data = json.loads(response_body)
     logger.info(f"Agent Response: {response_data}")
 
-    return response_data.get("result", "")
+    result = response_data.get("result", "")
 
-def run_agent_in_docker(prompt, history_mode, mcp_servers, model_name):
+    # save conversation to memory
+    memory_client = MemoryClient(region_name=bedrock_region)
+    memory_result = memory_client.create_event(
+        memory_id=memory_id,
+        actor_id=user_id, 
+        session_id=user_id, 
+        messages=[
+            (prompt, "USER"),
+            (result, "ASSISTANT")
+        ]
+    )
+    logger.info(f"result of save conversation to memory: {memory_result}")
+    
+    # conversations = memory_client.list_events(
+    #     memory_id=memory_id,
+    #     actor_id=user_id,
+    #     session_id=user_id,
+    #     max_results=5,
+    # )
+    # logger.info(f"conversations: {conversations}")
+
+    return result
+
+def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_name):
+    user_id = agent_type
+    logger.info(f"user_id: {user_id}")
+
     payload = json.dumps({
         "prompt": prompt,
         "mcp_servers": mcp_servers,
@@ -705,6 +743,12 @@ def run_agent_in_docker(prompt, history_mode, mcp_servers, model_name):
         "user_id": user_id,
         "history_mode": history_mode
     })
+
+    if agent_type == 'LangGraph':
+        memory_id = langgraph_memory_id
+    else: 
+        memory_id = strands_memory_id
+    logger.info(f"memory_id: {memory_id}")
 
     headers = {
         "Content-Type": "application/json"
@@ -734,7 +778,30 @@ def run_agent_in_docker(prompt, history_mode, mcp_servers, model_name):
         response_data = response.json()
         logger.info(f"Agent Response: {response_data}")
 
-        return response_data.get("result", "")
+        result = response_data.get("result", "")
+
+        # save conversation to memory
+        memory_client = MemoryClient(region_name=bedrock_region)
+        memory_result = memory_client.create_event(
+            memory_id=memory_id,
+            actor_id=user_id, 
+            session_id=user_id, 
+            messages=[
+                (prompt, "USER"),
+                (result, "ASSISTANT")
+            ]
+        )
+        logger.info(f"result of save conversation to memory: {memory_result}")
+        
+        conversations = memory_client.list_events(
+            memory_id=memory_id,
+            actor_id=user_id,
+            session_id=user_id,
+            max_results=5,
+        )
+        logger.info(f"conversations: {conversations}")
+
+        return result
         
     except requests.exceptions.ConnectionError as e:
         error_msg = f"Docker container connection failed: {str(e)}"
