@@ -209,9 +209,9 @@ After execution, select the MCP server to use from the left menu and enter your 
 
 ## Execution Results
 
-If you select "use_aws" from the MCP server and enter "내 cloudwatch 로그 리스트는?" (What are my cloudwatch log lists?), it will check the AWS cloudwatch log list using AWS CLI and show it as follows:
+If you select "use_aws" from the MCP server and enter "What are my cloudwatch log lists?", it will check the AWS cloudwatch log list using AWS CLI and show it as follows:
 
-<img width="724" height="732" alt="image" src="https://github.com/user-attachments/assets/58191496-eee0-4dbb-ab9a-7ddb71340e69" />
+<img width="650" height="873" alt="noname" src="https://github.com/user-attachments/assets/151d11dd-04ac-48d9-b125-108748dd2ce9" />
 
 If you select "tavily search" and search for "강남역 맛집은?" (What are good restaurants near Gangnam Station?), it will search for information about Gangnam Station and show the results as follows:
 
