@@ -1,0 +1,4 @@
+{
+    "agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_langgraph-RL8K6522Yy",
+    "model_id": "LangGraph-VMvQCK89aW"
+}
