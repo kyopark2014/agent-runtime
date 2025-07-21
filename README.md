@@ -235,3 +235,4 @@ MCP server에서 "use_aws"를 선택하고, "내 cloudwatch 로그 리스트는?
 
 [get_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/get_agent_runtime.html)
 
+[Amazon Bedrock AgentCore Samples](https://github.com/awslabs/amazon-bedrock-agentcore-samples)
