@@ -203,9 +203,7 @@ Here, you can test the operation of AgentCore using Streamlit. You can run strea
 streamlit run application/app.py
 ```
 
-After execution, select the MCP server to use from the left menu and enter your question as shown below.
-
-<img width="1330" height="847" alt="image" src="https://github.com/user-attachments/assets/50cda7f5-3cd2-4a21-8c36-c0d8272fad2a" />
+After execution, select the MCP server to use from the left menu and enter your question.
 
 ## Execution Results
 
