@@ -140,7 +140,8 @@ response_data = json.loads(response_body)
 
 In Streamlit, you can test the local docker by selecting "Docker" as shown below.
 
-<img width="195" height="95" alt="image" src="https://github.com/user-attachments/assets/f0bc2385-30d4-4486-b002-a3ff25928802" />
+<img width="195" height="66" alt="noname" src="https://github.com/user-attachments/assets/8b1fb2a4-8f0a-4447-8943-bef1e9c51223" />
+
 
 When "Docker" is selected, it sends a request to http://localhost:8080/invocations and checks the response as in [chat.py](./application/chat.py).
 
