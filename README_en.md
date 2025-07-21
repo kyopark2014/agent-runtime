@@ -213,9 +213,9 @@ If you select "use_aws" from the MCP server and enter "What are my cloudwatch lo
 
 <img width="650" height="873" alt="noname" src="https://github.com/user-attachments/assets/151d11dd-04ac-48d9-b125-108748dd2ce9" />
 
-If you select "tavily search" and search for "강남역 맛집은?" (What are good restaurants near Gangnam Station?), it will search for information about Gangnam Station and show the results as follows:
+If you select "tavily search" and search for "What are good restaurants near Gangnam Station?", it will search for information about Gangnam Station and show the results as follows:
 
-<img width="723" height="662" alt="image" src="https://github.com/user-attachments/assets/cbb1241d-8f17-4894-a43c-2d578e2987e2" />
+<img width="647" height="884" alt="noname" src="https://github.com/user-attachments/assets/966efab8-a610-4739-9001-d3ce0fbc47e8" />
 
 ## Reference 
 
