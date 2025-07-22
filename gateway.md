@@ -30,9 +30,55 @@ Target 은 Gateway가 에이전트에게 도구로 제공할 API나 Lambda 함�
 - ListGateways: 모든 gateway 목록 조회
 - Gateway 타겟 관련 작업(생성, 업데이트, 삭제, 조회, 목록 확인)
 
+## 구현하기
+
+아래와 같이 [bedrock-agentcore-control](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control.html) 서비스에 대한 client를 준비합니다.
+
+```python
+cp_client = boto3.client(
+ 'bedrock-agentcore-control',
+ region_name="us-west-2",
+ endpoint_url="https://bedrock-agentcore-control.us-west-2.amazonaws.com"
+)
+```
+
+아래와 같이 credential을 생성할 수 있습니다.
+
+```python
+response = cp_client.create_api_key_credential_provider(
+    name='tavilyapikey-agentcore',
+    apiKey='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'
+)
+print(response)
+```
+
+생성된 credential은 아래와 같이 확인할 수 있습니다.
+
+```python
+response = cp_client.list_api_key_credential_providers()
+print(response)
+```
+
+이때의 응답은 아래와 같습니다.
+
+```python
+{
+   "credentialProviders":[
+      {
+         "name":"tavilyapikey-agentcore",
+         "credentialProviderArn":"arn:aws:bedrock-agentcore:us-west-2:262976740991:token-vault/default/apikeycredentialprovider/tavilyapikey-agentcore",
+         "createdTime":datetime.datetime(2025,7,22,16,28,49,295000,
+         "tzinfo=tzlocal())",
+         "lastUpdatedTime":datetime.datetime(2025,7,22,16,28,49,295000,"tzinfo=tzlocal())"
+      }
+   ]
+}
+```
+
 ## Reference
 
 [boto3 - create_gateway_target](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/create_gateway_target.html)
 
 [boto3 - list_api_key_credential_providers](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/list_api_key_credential_providers.html)
+
 
