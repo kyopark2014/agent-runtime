@@ -793,13 +793,13 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
         )
         logger.info(f"result of save conversation to memory: {memory_result}")
         
-        conversations = memory_client.list_events(
-            memory_id=memory_id,
-            actor_id=user_id,
-            session_id=user_id,
-            max_results=5,
-        )
-        logger.info(f"conversations: {conversations}")
+        # conversations = memory_client.list_events(
+        #     memory_id=memory_id,
+        #     actor_id=user_id,
+        #     session_id=user_id,
+        #     max_results=5,
+        # )
+        # logger.info(f"conversations: {conversations}")
 
         return result
         
