@@ -36,9 +36,9 @@ Target 은 Gateway가 에이전트에게 도구로 제공할 API나 Lambda 함�
 
 ```python
 cp_client = boto3.client(
- 'bedrock-agentcore-control',
- region_name="us-west-2",
- endpoint_url="https://bedrock-agentcore-control.us-west-2.amazonaws.com"
+   'bedrock-agentcore-control',
+   region_name="us-west-2",
+   endpoint_url="https://bedrock-agentcore-control.us-west-2.amazonaws.com"
 )
 ```
 
