@@ -33,3 +33,6 @@ Target 은 Gateway가 에이전트에게 도구로 제공할 API나 Lambda 함�
 ## Reference
 
 [boto3 - create_gateway_target](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/create_gateway_target.html)
+
+[boto3 - list_api_key_credential_providers](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/list_api_key_credential_providers.html)
+
