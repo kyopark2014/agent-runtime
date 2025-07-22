@@ -30,3 +30,6 @@ Target 은 Gateway가 에이전트에게 도구로 제공할 API나 Lambda 함�
 - ListGateways: 모든 gateway 목록 조회
 - Gateway 타겟 관련 작업(생성, 업데이트, 삭제, 조회, 목록 확인)
 
+## Reference
+
+[boto3 - create_gateway_target](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/create_gateway_target.html)
