@@ -1,5 +1,10 @@
 # Memory의 사용
 
+Memory와 관련된 용어는 아래와 같습니다.
+
+- actorId: Memory의 event와 관련된 사용자 또는 agent/user 형태로 된 계정으로서 "/agent-support-123/customer-456"의 형태를 가집니다.
+- sessionId: 대화 세션과 같은 이벤트들의 그룹
+  
 MemoryClient의 list_memories을 활용하여 메모리 항목을 확인합니다.
 
 ```python
