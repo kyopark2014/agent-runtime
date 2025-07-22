@@ -67,8 +67,7 @@ print(response)
       {
          "name":"tavilyapikey-agentcore",
          "credentialProviderArn":"arn:aws:bedrock-agentcore:us-west-2:262976740991:token-vault/default/apikeycredentialprovider/tavilyapikey-agentcore",
-         "createdTime":datetime.datetime(2025,7,22,16,28,49,295000,
-         "tzinfo=tzlocal())",
+         "createdTime":datetime.datetime(2025,7,22,16,28,49,295000,"tzinfo=tzlocal())",
          "lastUpdatedTime":datetime.datetime(2025,7,22,16,28,49,295000,"tzinfo=tzlocal())"
       }
    ]
