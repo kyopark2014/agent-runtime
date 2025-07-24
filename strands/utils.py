@@ -76,21 +76,6 @@ def get_agent_runtime_arn():
     else:
         return None
 
-# agent_runtime_arn
-# agent_runtime_arn = get_agent_runtime_arn() # not supported in docker
-# logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
-
-fname = 'agent_runtime_arn.json'
-agent_runtime_arn = None
-try:
-    with open(fname, 'r') as f:
-        config = json.load(f)
-        agent_runtime_arn = config['agent_runtime_arn']
-        logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
-except Exception as e:
-    logger.info(f"No agent_runtime_arn.json")
-    pass
-
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):
         content_type = "image/jpeg"
