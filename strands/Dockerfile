@@ -51,14 +51,14 @@ RUN echo "[default]" > /root/.aws/config && \
 WORKDIR /app
 
 # Core dependencies
-RUN pip install boto3 botocore
+RUN pip install --upgrade "boto3==1.39.12" "botocore==1.39.12"
 RUN pip install langchain_aws langchain langchain_community langchain_experimental
-RUN pip install mcp langchain-mcp-adapters==0.0.9
-RUN pip install strands-agents strands-agents-tools
+RUN pip install mcp==1.12.1 langchain-mcp-adapters==0.1.9
+RUN pip install strands-agents==1.0.1 strands-agents-tools
 RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv
 
 # AWS and search dependencies
-RUN pip install aioboto3 opensearch-py
+RUN pip install opensearch-py
 RUN pip install tavily-python==0.5.0
 
 # Data processing and analysis

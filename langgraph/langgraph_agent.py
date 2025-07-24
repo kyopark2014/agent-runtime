@@ -525,27 +525,51 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
 
     return server_info
 
-def get_mcp_server_name(too_name):
-    mcp_server_name = {}
-    for server_name, tools in mcp_server_info:
-        tool_names = [tool.name for tool in tools]
-        logger.info(f"{server_name}: {tool_names}")
-        for name in tool_names:
-            mcp_server_name[name] = server_name
-    return mcp_server_name[too_name]
+# def get_mcp_server_name(too_name):
+#     mcp_server_name = {}
+#     for server_name, tools in mcp_server_info:
+#         tool_names = [tool.name for tool in tools]
+#         logger.info(f"{server_name}: {tool_names}")
+#         for name in tool_names:
+#             mcp_server_name[name] = server_name
+#     return mcp_server_name[too_name]
 
-def get_mcp_server_list():
-    server_lists = []
-    for server_name, tools in mcp_server_info:
-        server_lists.append(server_name)
-    return server_lists
+# def get_mcp_server_list():
+#     server_lists = []
+#     for server_name, tools in mcp_server_info:
+#         server_lists.append(server_name)
+#     return server_lists
+
+user_id = "LangGraph"
+memory_id = None
 
 async def run_agent(query, mcp_servers, historyMode, containers):
-    global status_msg, response_msg, image_urls, references, mcp_server_info
+    global status_msg, response_msg, image_urls, references
     status_msg = []
     response_msg = []
     image_urls = []
     references = []
+
+    global memory_id
+    from bedrock_agentcore.memory import MemoryClient
+    memory_client = MemoryClient(region_name="us-west-2")
+
+    memories = memory_client.list_memories()
+    logger.info(f"memories: {memories}")
+    for memory in memories:
+        logger.info(f"Memory Arn: {memory.get('arn')}")
+        memory_id = memory.get('id')
+        logger.info(f"Memory ID: {memory_id}")
+        logger.info("--------------------------------------------------------------------")
+
+    if len(memories) == 0:
+        result = client.create_memory(
+            name=user_id,
+            description="LangGraph Memory",
+            event_expiry_days=7, # 7 - 365 days
+            # memory_execution_role_arn=memory_execution_role_arn
+        )
+        logger.info(f"result: {result}")
 
     global index
     index = 0
@@ -561,76 +585,94 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     server_params = load_multiple_mcp_server_parameters(mcp_json)
     logger.info(f"server_params: {server_params}")    
 
-    async with MultiServerMCPClient(server_params) as client:        
-        mcp_server_info = client.server_name_to_tools.items() 
-
-        tools = client.get_tools()        
-        
-        tool_list = [tool.name for tool in tools]
-        logger.info(f"tool_list: {tool_list}")
-
-        if debug_mode == "Enable":    
-            containers["tools"].info(f"Tools: {tool_list}")
-                    
-        if historyMode == "Enable":
-            app = buildChatAgentWithHistory(tools)
-            config = {
-                "recursion_limit": 50,
-                "configurable": {"thread_id": chat.userId},
-                "containers": containers,
-                "tools": tools,
-                "system_prompt": None,
-                "debug_mode": debug_mode
-            }
-        else:
-            app = buildChatAgent(tools)
-            config = {
-                "recursion_limit": 50,
-                "containers": containers,
-                "tools": tools,
-                "system_prompt": None,
-                "debug_mode": debug_mode
-            }
-        
-        inputs = {
-            "messages": [HumanMessage(content=query)]
-        }
-                
-        value = result = None
-        final_output = None
-        async for output in app.astream(inputs, config):
-            for key, value in output.items():
-                logger.info(f"--> key: {key}, value: {value}")
-
-                if key == "messages" or key == "agent":
-                    if isinstance(value, dict) and "messages" in value:
-                        final_output = value
-                    elif isinstance(value, list):
-                        final_output = {"messages": value, "image_url": []}
-                    else:
-                        final_output = {"messages": [value], "image_url": []}
-
-        if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
-            result = final_output["messages"][-1].content
-        else:
-            result = "답변을 찾지 못하였습니다."
-
-        logger.info(f"result: {final_output}")
-        logger.info(f"references: {references}")
-        if references:
-            ref = "\n\n### Reference\n"
-            for i, reference in enumerate(references):
-                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
-            result += ref
-
-        image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
-
-        logger.info(f"result: {result}")       
-        logger.info(f"image_url: {image_url}")
-
-        if containers is not None:
-            containers['notification'][index-1].markdown(result)
+    client = MultiServerMCPClient(server_params)
+    tools = await client.get_tools()
     
+    tool_list = [tool.name for tool in tools]
+    logger.info(f"tool_list: {tool_list}")
+
+    if debug_mode == "Enable":    
+        containers["tools"].info(f"Tools: {tool_list}")
+                
+    if historyMode == "Enable":
+        app = buildChatAgentWithHistory(tools)
+        config = {
+            "recursion_limit": 50,
+            "configurable": {"thread_id": chat.userId},
+            "containers": containers,
+            "tools": tools,
+            "system_prompt": None,
+            "debug_mode": debug_mode
+        }
+    else:
+        app = buildChatAgent(tools)
+        config = {
+            "recursion_limit": 50,
+            "containers": containers,
+            "tools": tools,
+            "system_prompt": None,
+            "debug_mode": debug_mode
+        }
+    
+    inputs = {
+        "messages": [HumanMessage(content=query)]
+    }
+            
+    value = result = None
+    final_output = None
+    async for output in app.astream(inputs, config):
+        for key, value in output.items():
+            logger.info(f"--> key: {key}, value: {value}")
+
+            if key == "messages" or key == "agent":
+                if isinstance(value, dict) and "messages" in value:
+                    final_output = value
+                elif isinstance(value, list):
+                    final_output = {"messages": value, "image_url": []}
+                else:
+                    final_output = {"messages": [value], "image_url": []}
+
+    if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
+        result = final_output["messages"][-1].content
+    else:
+        result = "답변을 찾지 못하였습니다."
+
+    logger.info(f"result: {final_output}")
+    logger.info(f"references: {references}")
+    if references:
+        ref = "\n\n### Reference\n"
+        for i, reference in enumerate(references):
+            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
+        result += ref
+
+    image_url = final_output["image_url"] if final_output and "image_url" in final_output else []
+
+    logger.info(f"result: {result}")       
+    logger.info(f"image_url: {image_url}")
+
+    if containers is not None:
+        containers['notification'][index-1].markdown(result)
+
+    # save conversation to memory
+    memory_result = memory_client.create_event(
+        memory_id=memory.get("id"),
+        actor_id=user_id, 
+        session_id=user_id, 
+        messages=[
+            (query, "USER"),
+            (result, "ASSISTANT")
+        ]
+    )
+    logger.info(f"result of save conversation to memory: {memory_result}")
+
+    conversations = memory_client.list_events(
+        memory_id=memory.get("id"),
+        actor_id=user_id,
+        session_id=user_id,
+        max_results=5,
+    )
+    logger.info(f"conversations: {conversations}")
+
     return result, image_url
 
 async def run_task(question, tools, system_prompt, containers, historyMode, previous_status_msg, previous_response_msg):
