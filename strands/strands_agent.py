@@ -29,7 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("strands-agent")
 
-update_required = False
 initiated = False
 strands_tools = []
 mcp_servers = []
@@ -38,12 +37,15 @@ status_msg = []
 response_msg = []
 references = []
 image_url = []
+tool_list = []
 
 s3_prefix = "docs"
 capture_prefix = "captures"
 
 selected_strands_tools = []
 selected_mcp_servers = []
+
+history_mode = "Disable"
 
 index = 0
 def add_notification(containers, message):
@@ -187,8 +189,6 @@ class MCPClientManager:
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 return None
-        else:
-            logger.info(f"Reusing existing MCP client: {name}")
                 
         return self.clients[name]
     
@@ -572,14 +572,10 @@ def get_tool_list(tools):
     return tool_list
 
 async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode):
-    global references, image_url
-    image_url = []    
-    references = []    
-    tool_list = []
+    global agent, initiated
+    global selected_strands_tools, selected_mcp_servers, history_mode, tool_list
 
-    global agent, initiated, update_required
-    global selected_strands_tools, selected_mcp_servers
-
+    update_required = False
     if selected_strands_tools != strands_tools:
         logger.info("strands_tools update!")
         selected_strands_tools = strands_tools
@@ -592,12 +588,20 @@ async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode)
         update_required = True
         logger.info(f"mcp_servers: {mcp_servers}")
 
+    if history_mode != historyMode:
+        logger.info("history_mode update!")
+        history_mode = historyMode
+        update_required = True
+        logger.info(f"history_mode: {history_mode}")
+
+    logger.info(f"initiated: {initiated}, update_required: {update_required}")
+
     if not initiated or update_required:         
         init_mcp_clients(mcp_servers)
         tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")
 
-        agent = create_agent(system_prompt, tools, historyMode)
+        agent = create_agent(system_prompt, tools, history_mode)
         tool_list = get_tool_list(tools)
 
         if not initiated:
@@ -606,8 +610,6 @@ async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode)
         else:
             logger.info("update agent!")
             update_required = False
-
-    return agent, tool_list
 
 async def show_streams(agent_stream, containers):
     tool_name = ""
@@ -715,8 +717,11 @@ def get_reference(references):
     return ref
 
 async def run_agent(question, strands_tools, mcp_servers, historyMode, containers):
-    global status_msg
+    global status_msg, image_url, references, tool_list
     status_msg = []
+    image_url = []    
+    references = []    
+    tool_list = []
 
     debug_mode = chat.debug_mode
 
@@ -724,7 +729,7 @@ async def run_agent(question, strands_tools, mcp_servers, historyMode, container
         containers['status'].info(get_status_msg(f"(start"))    
 
     # initiate agent
-    agent, tool_list = await initiate_agent(None, strands_tools, mcp_servers, historyMode)
+    await initiate_agent(None, strands_tools, mcp_servers, historyMode)
     logger.info(f"tool_list: {tool_list}")    
     if debug_mode == 'Enable' and containers is not None and tool_list:
         containers['tools'].info(f"tool_list: {tool_list}")

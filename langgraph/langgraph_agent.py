@@ -19,6 +19,7 @@ from typing import Literal
 from langgraph.graph import START, END, StateGraph
 from typing_extensions import Annotated, TypedDict
 from langgraph.graph.message import add_messages
+from bedrock_agentcore.memory import MemoryClient
 
 logging.basicConfig(
     level=logging.INFO,  
@@ -497,18 +498,13 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
         command = ""
         args = []
         for server in mcpServers:
-            logger.info(f"server: {server}")
-
             config = mcpServers.get(server)
-            logger.info(f"config: {config}")
-
             if "command" in config:
                 command = config["command"]
             if "args" in config:
                 args = config["args"]
             if "env" in config:
                 env = config["env"]
-
                 server_info[server] = {
                     "command": command,
                     "args": args,
@@ -521,8 +517,6 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
                     "args": args,
                     "transport": "stdio"
                 }
-    logger.info(f"server_info: {server_info}")
-
     return server_info
 
 # def get_mcp_server_name(too_name):
@@ -542,18 +536,10 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
 
 user_id = "LangGraph"
 memory_id = None
-
-async def run_agent(query, mcp_servers, historyMode, containers):
-    global status_msg, response_msg, image_urls, references
-    status_msg = []
-    response_msg = []
-    image_urls = []
-    references = []
-
+memory_client = MemoryClient(region_name="us-west-2")
+def init_memory():
     global memory_id
-    from bedrock_agentcore.memory import MemoryClient
-    memory_client = MemoryClient(region_name="us-west-2")
-
+    
     memories = memory_client.list_memories()
     logger.info(f"memories: {memories}")
     for memory in memories:
@@ -563,13 +549,38 @@ async def run_agent(query, mcp_servers, historyMode, containers):
         logger.info("--------------------------------------------------------------------")
 
     if len(memories) == 0:
-        result = client.create_memory(
+        result = memory_client.create_memory(
             name=user_id,
             description="LangGraph Memory",
             event_expiry_days=7, # 7 - 365 days
             # memory_execution_role_arn=memory_execution_role_arn
         )
         logger.info(f"result: {result}")
+        memory_id = result.get('id')
+
+def save_conversation_to_memory(query, result):
+    # save conversation to memory
+    memory_result = memory_client.create_event(
+        memory_id=memory_id,
+        actor_id=user_id, 
+        session_id=user_id, 
+        messages=[
+            (query, "USER"),
+            (result, "ASSISTANT")
+        ]
+    )
+    logger.info(f"result of save conversation to memory: {memory_result}")
+
+async def run_agent(query, mcp_servers, historyMode, containers):
+    global status_msg, response_msg, image_urls, references
+    status_msg = []
+    response_msg = []
+    image_urls = []
+    references = []
+
+    global memory_id
+    if memory_id is None:
+        init_memory()
 
     global index
     index = 0
@@ -653,25 +664,16 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     if containers is not None:
         containers['notification'][index-1].markdown(result)
 
-    # save conversation to memory
-    memory_result = memory_client.create_event(
-        memory_id=memory.get("id"),
-        actor_id=user_id, 
-        session_id=user_id, 
-        messages=[
-            (query, "USER"),
-            (result, "ASSISTANT")
-        ]
-    )
-    logger.info(f"result of save conversation to memory: {memory_result}")
+    # save event to memory
+    save_conversation_to_memory(query, result) 
 
-    conversations = memory_client.list_events(
-        memory_id=memory.get("id"),
-        actor_id=user_id,
-        session_id=user_id,
-        max_results=5,
-    )
-    logger.info(f"conversations: {conversations}")
+    # conversations = memory_client.list_events(
+    #     memory_id=memory.get("id"),
+    #     actor_id=user_id,
+    #     session_id=user_id,
+    #     max_results=5,
+    # )
+    # logger.info(f"conversations: {conversations}")
 
     return result, image_url
 
