@@ -56,7 +56,7 @@ items = response['items']
 ```
 
 
-## Coder Interpreter 구현 (AgentCore SDK)
+## Coder Interpreter 구현 (AgentCore Tool)
 
 AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_interpreter.py](./code_interpreter.py)을 참조합니다.
 
@@ -68,7 +68,10 @@ AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다
 아래와 같이 code를 실행하는 execute_python을 tool로 생성합니다.
 
 ```python
-from bedrock_agentcore.tools.code_interpreter_client import code_session
+from bedrock_agentcore.tools.code_interpreter_client import CodeInterpreter
+
+code_client = CodeInterpreter('us-west-2')
+code_client.start(session_timeout_seconds=1200)
 
 @tool
 def execute_python(code: str, description: str = "") -> str:
