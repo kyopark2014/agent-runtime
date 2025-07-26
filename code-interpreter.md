@@ -55,8 +55,7 @@ items = response['items']
 }
 ```
 
-
-## Coder Interpreter 구현 (AgentCore Tool)
+## Coder Interpreter 구현 (AgentCore SDK)
 
 AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_interpreter.py](./code_interpreter.py)을 참조합니다.
 
