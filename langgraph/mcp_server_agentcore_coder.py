@@ -1,6 +1,6 @@
 import logging
 import sys
-import mcp_coder as coder
+import mcp_agentcore_coder as coder
 
 from typing import Dict, Optional, Any
 from mcp.server.fastmcp import FastMCP 
@@ -32,31 +32,16 @@ except Exception as e:
 ######################################
 
 @mcp.tool()
-def repl_coder(code):
+def agentcore_coder(code):
     """
     Use this to execute python code and do math. 
     If you want to see the output of a value, you should print it out with `print(...)`. This is visible to the user.
     code: the Python code was written in English
     """
-    logger.info(f"repl_coder --> code:\n {code}")
+    logger.info(f"agentcore_coder --> code:\n {code}")
 
-    return coder.repl_coder(code)
+    return coder.agentcore_coder(code)
 
-@mcp.tool()
-def repl_drawer(code):
-    """
-    Execute a Python script for draw a graph.
-    Since Python runtime cannot use external APIs, necessary data must be included in the code.
-    The graph should use English exclusively for all textual elements.
-    Do not save pictures locally bacause the runtime does not have filesystem.
-    When a comparison is made, all arrays must be of the same length.
-    code: the Python code was written in English
-    return: the url of graph
-    """ 
-    logger.info(f"repl_drawer --> code:\n {code}")
-    
-    return coder.repl_drawer(code)
-    
 if __name__ =="__main__":
     print(f"###### main ######")
     mcp.run(transport="stdio")

@@ -52,7 +52,7 @@ with st.sidebar:
         # Change radio to checkbox
         mcp_options = [
             "basic", "tavily-search", "aws-api", "aws-knowledge", "aws document", 
-            "use_aws", "code interpreter", "knowledge base",     
+            "use_aws", "repl coder","agentcore coder", "knowledge base",     
             "perplexity", "wikipedia",  
             "filesystem", "terminal", "text editor", "context7", "puppeteer", 
             "playwright", "airbnb",  

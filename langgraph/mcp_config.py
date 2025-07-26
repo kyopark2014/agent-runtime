@@ -11,7 +11,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stderr)
     ]
 )
-logger = logging.getLogger("mcp-cost")
+logger = logging.getLogger("mcp-config")
 
 config = utils.load_config()
 print(f"config: {config}")
@@ -39,8 +39,10 @@ def load_config(mcp_type):
         mcp_type = 'aws_storage'
     elif mcp_type == "knowledge base":
         mcp_type = 'knowledge_base_lambda'
-    elif mcp_type == "code interpreter":
-        mcp_type = 'code_interpreter'
+    elif mcp_type == "repl coder":
+        mcp_type = 'repl_coder'
+    elif mcp_type == "agentcore coder":
+        mcp_type = 'agentcore_coder'
     elif mcp_type == "aws cli":
         mcp_type = 'aws_cli'
     elif mcp_type == "text editor":
@@ -49,7 +51,6 @@ def load_config(mcp_type):
         mcp_type = 'aws-api-mcp-server'
     elif mcp_type == "aws-knowledge":
         mcp_type = 'aws-knowledge-mcp-server'
-    logger.info(f"mcp_type: {mcp_type}")
 
     if mcp_type == "basic":
         return {
@@ -220,17 +221,28 @@ def load_config(mcp_type):
             }
         }    
     
-    elif mcp_type == "code_interpreter":
+    elif mcp_type == "repl_coder":
         return {
             "mcpServers": {
                 "aws_storage": {
                     "command": "python",
                     "args": [
-                        f"{workingDir}/mcp_server_coder.py"
+                        f"{workingDir}/mcp_server_repl_coder.py"
                     ]
                 }
             }
         }    
+    elif mcp_type == "agentcore_coder":
+        return {
+            "mcpServers": {
+                "agentcore_coder": {
+                    "command": "python",
+                    "args": [
+                        f"{workingDir}/mcp_server_agentcore_coder.py"
+                    ]
+                }
+            }
+        }
     
     elif mcp_type == "aws_cli":
         return {
@@ -375,7 +387,7 @@ def load_config(mcp_type):
             }
         }
     
-    elif mcp_type == "arxiv":
+    elif mcp_type == "arxiv-manual":
         return {
             "mcpServers": {
                 "arxiv-manager": {
@@ -416,7 +428,7 @@ def load_config(mcp_type):
                 "use_aws": {
                     "command": "python",
                     "args": [
-                        "application/mcp_server_use_aws.py"
+                        f"{workingDir}/mcp_server_use_aws.py"
                     ],
                     "env": {
                         "AWS_REGION": aws_region,
@@ -432,7 +444,7 @@ def load_config(mcp_type):
                 "aws_knowledge_base": {
                     "command": "python",
                     "args": [
-                        "application/mcp_server_kb.py"
+                        f"{workingDir}/mcp_server_kb.py"
                     ],
                     "env": {
                         "KB_INCLUSION_TAG_KEY": projectName
@@ -447,7 +459,7 @@ def load_config(mcp_type):
                 "awslabs.aws-api-mcp-server": {
                     "command": "uvx",
                     "args": [
-                            "awslabs.aws-api-mcp-server@latest"
+                        "awslabs.aws-api-mcp-server@latest"
                     ],
                     "env": {
                         "AWS_REGION": aws_region,
@@ -478,14 +490,9 @@ def load_selected_config(mcp_servers: dict):
     
     loaded_config = {}
     for server in mcp_servers:
-        logger.info(f"server: {server}")
-
-        config = load_config(server)
-        # logger.info(f"config: {config}")
-        
+        config = load_config(server)        
         if config:
             loaded_config.update(config["mcpServers"])
-    # logger.info(f"loaded_config: {loaded_config}")        
     return {
         "mcpServers": loaded_config
     }
