@@ -2,7 +2,7 @@
 
 AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. 
 
-## 관련 API
+## APIs
 
 [start_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/start_code_interpreter_session.html)의 결과는 아래와 같습니다.
 
@@ -187,6 +187,77 @@ python code_interpreter.py
 
 분석 결과, 이 데이터셋은 매우 다양하고 고르게 분산된 선호도를 보이며, 특별한 패턴이나 집중 현상은 관찰되지 않았습니다. 각 개인은 매우 고유한 선호도 조합을 가지고 있으며, 같은 성씨를 가진 사람들 사이에서도 선호도의 유사성은 낮았습니다. 전체 데이터의 20%가 독특한 선호 조합을 보였으며, 이는 데이터의 다양성과 개인 선호의 고유성을 강조합니다.%
 ```
+
+
+## MCP로 활용하기 
+
+[mcp_server_agentcore_coder.py](./langgraph/mcp_server_agentcore_coder.py)와 같이 MCP 서버를 설정하고, [mcp_agentcore_coder.py](./langgraph/mcp_agentcore_coder.py)와 같이 구현합니다. 
+
+아래와 같이 bedrock-agentcore를 이용해 AgentCore의 code interpreter를 생성할 수 있습니다.
+
+```python
+client = boto3.client(
+    "bedrock-agentcore", 
+    region_name=aws_region,
+    endpoint_url=f"https://bedrock-agentcore.{aws_region}.amazonaws.com"
+)
+
+def get_code_interpreter_sessionId():
+    session_id = None
+    response = client.list_code_interpreter_sessions(
+        codeInterpreterIdentifier='aws.codeinterpreter.v1',
+        maxResults=5,
+        status='READY'
+    )
+    items = response['items']
+
+    if items is not None:
+        for item in items:
+            session_id = item['sessionId']
+            break
+    
+    if session_id is None:  # still no sessionId
+        logger.info("No ready sessions found")
+        response = client.start_code_interpreter_session(
+            codeInterpreterIdentifier='aws.codeinterpreter.v1',
+            name="agentcore-code-session",
+            sessionTimeoutSeconds=900
+        )
+        logger.info(f"response of start_code_interpreter_session: {response}")
+        session_id = response['sessionId']
+
+    return session_id
+```
+
+Code interpreter의 session 정보를 가지고 아래와 같이 LLM이 생성한 code를 실행할 수 있습니다.
+
+```java
+execute_response = client.invoke_code_interpreter(
+  codeInterpreterIdentifier="aws.codeinterpreter.v1",
+  sessionId=sessionId,
+  name="executeCode",
+  arguments={
+      "language": "python",
+      "code": code
+  }
+)
+logger.info(f"execute_response: {execute_response}")
+
+result_text = ""
+for event in execute_response['stream']:
+  if 'result' in event:
+      result = event['result']
+      if 'content' in result:
+          for content_item in result['content']:
+              if content_item['type'] == 'text':
+                  result_text = content_item['text']
+                  logger.info(f"result: {result_text}")
+```
+
+"'contents/stock_prices.csv'의 내용을 분석해서 insight를 열거해보세요."와 같이 질문하면 아래와 같은 분석 결과를 얻을 수 있습니다.
+
+<img width="724" height="782" alt="image" src="https://github.com/user-attachments/assets/cd0a210c-97c9-4439-8168-7a2ca62bcce7" />
+
 
 ## Reference
 
