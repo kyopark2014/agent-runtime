@@ -1,6 +1,64 @@
 # Code Interpreter
 
-AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_interpreter.py](./code_interpreter.py)을 참조합니다.
+AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. 
+
+## 관련 API
+
+[start_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/start_code_interpreter_session.html)의 결과는 아래와 같습니다.
+
+```java
+{
+   "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
+   "sessionId":"01K12NP7J6E90BXX19AGA4S017",
+   "createdAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())"
+}
+```
+
+[list_code_interpreter_sessions](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/list_code_interpreter_sessions.html)을 이용하여 현재 READY인 세션을 확인합니다.
+
+```python
+response = client.list_code_interpreter_sessions(
+    codeInterpreterIdentifier='aws.codeinterpreter.v1',
+    maxResults=5,
+    status='READY'
+)
+items = response['items']
+```
+
+이에 대한 결과는 아래와 같습니다.
+
+```java
+{
+   "items":[
+      {
+         "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
+         "sessionId":"01K12NP7J6E90BXX19AGA4S017",
+         "name":"my-code-session",
+         "status":"READY",
+         "createdAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())",
+         "lastUpdatedAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())"
+      }
+   ]
+}
+```
+
+[get_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/get_code_interpreter_session.html)은 세션의 상태를 확인합니다.
+
+```java
+{
+   "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
+   "sessionId":"01K12Q3BYGCVWZBHMWAQNRR893",
+   "name":"my-code-session",
+   "createdAt":datetime.datetime(2025,7,26,6,35,35,220159,"tzinfo=tzutc())",
+   "sessionTimeoutSeconds":900,
+   "status":"READY"
+}
+```
+
+
+## Coder Interpreter 구현
+
+AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_interpreter.py](./code_interpreter.py)을 참조합니다.
 
 여기에서는 [data.csv](./contents/data.csv)에 대해 분석을 수행합니다.
 
