@@ -1,6 +1,6 @@
 # Code Interpreter
 
-AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. AgentCore의 Code Executor를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_executor.py](./code_executor.py)을 참조합니다.
+AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_interpreter.py](./code_interpreter.py)을 참조합니다.
 
 여기에서는 [data.csv](./contents/data.csv)에 대해 분석을 수행합니다.
 
@@ -64,7 +64,7 @@ asyncio.run(main())
 이후 아래와 같이 실행합니다.
 
 ```text
-python code_executor.py
+python code_interpreter.py
 ```
 
 이때의 결과는 아래와 같습니다.
