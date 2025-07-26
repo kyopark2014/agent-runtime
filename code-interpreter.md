@@ -2,8 +2,6 @@
 
 AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. AgentCore의 Code Executor를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_executor.py](./code_executor.py)을 참조합니다.
 
-## Code Executor
-
 여기에서는 [data.csv](./contents/data.csv)에 대해 분석을 수행합니다.
 
 <img width="470" height="618" alt="image" src="https://github.com/user-attachments/assets/a75d0a19-16df-4854-9445-82e00bbd9e35" />
