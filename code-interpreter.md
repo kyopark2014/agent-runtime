@@ -1,6 +1,6 @@
 # Code Interpreter
 
-AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. 
+AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. 여기에서는 AgentCore SDK 또는 boto3를 이용하는 방법에 대해 설명합니다.
 
 ## Coder Interpreter 구현 (AgentCore SDK)
 
