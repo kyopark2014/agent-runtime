@@ -4,10 +4,7 @@ from strands.models import BedrockModel
 import json
 import pandas as pd
 from typing import Dict, Any, List
-
-# Initialize the Code Interpreter within a supported AWS region.
-code_client = CodeInterpreter('us-west-2')
-code_client.start(session_timeout_seconds=1200)
+from strands_tools import file_read
 
 SYSTEM_PROMPT = """You are a helpful AI assistant that validates all answers through code execution using the tools provided. DO NOT Answer questions without using the tools
 
@@ -40,6 +37,10 @@ Check isError field to see if there was an error.
 
 Be thorough, accurate, and always validate your answers when possible."""
 
+# Initialize the Code Interpreter within a supported AWS region.
+code_client = CodeInterpreter('us-west-2')
+code_client.start(session_timeout_seconds=1200)
+
 #Define and configure the code interpreter tool
 @tool
 def execute_python(code: str, description: str = "") -> str:
@@ -66,7 +67,7 @@ model= BedrockModel(model_id=model_id)
 #configure the strands agent including the model and tool(s)
 agent=Agent(
     model=model,
-        tools=[execute_python],
+        tools=[execute_python, file_read],
         system_prompt=SYSTEM_PROMPT,
         callback_handler=None)
 
