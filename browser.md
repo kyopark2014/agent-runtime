@@ -1,7 +1,13 @@
 # AgentCore Browser
 
 ## Nova Act
-현재(2025.7) Nova Act는 Preview이며 한국에서 사용이 불가하므로 vpn을 이용해 amazon.com 아이디로 key를 발급합니다. 이후 아래와 같이 nova-act를 설치합니다.
+현재(2025.7) Nova Act는 Preview이며 한국에서 사용이 불가하므로 vpn을 이용해 amazon.com 아이디로 key를 발급한후 아래와 같이 사용준비를 합니다.
+
+```text
+export NOVA_ACT_API_KEY="your_api_key"
+```
+
+이후 아래와 같이 nova-act를 설치합니다.
 
 ```text
 pip install nova-act
