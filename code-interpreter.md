@@ -36,13 +36,14 @@ def execute_python(code: str, description: str = "") -> str:
 
 ```python
 import asyncio
+from strands_tools import file_read
 
 model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0"
 model= BedrockModel(model_id=model_id)
 
 agent=Agent(
     model=model,
-        tools=[execute_python],
+        tools=[execute_python, file_read],
         system_prompt=SYSTEM_PROMPT,
         callback_handler=None)
 
@@ -66,6 +67,68 @@ asyncio.run(main())
 python code_executor.py
 ```
 
+이때의 결과는 아래와 같습니다.
+
+```python
+'contents/data.csv' 파일의 탐색적 데이터 분석을 수행한 결과를 다음과 같이 정리했습니다. 파일에 접근 제한이 있어 파일 미리보기에서 추출한 데이터 샘플(30개 행)을 기반으로 분석했습니다.
+
+## 1. 데이터셋 개요
+- **규모**: 30개 행, 4개 컬럼
+- **컬럼**: Name, Preferred_City, Preferred_Animal, Preferred_Thing
+- **데이터 타입**: 모든 컬럼은 문자열(object) 타입
+- **결측치**: 없음 (모든 필드가 채워짐)
+
+## 2. 데이터 분포 분석
+
+### 선호 도시 분포
+- **가장 빈번한 도시**: London (3회, 10%)
+- **중간 빈도 도시**: Buenos Aires, Paris, Zurich, Naples (각 2회, 6.7%)
+- **희소 도시**: 19개 도시가 각각 1회만 등장 (전체의 63.3%)
+
+### 선호 동물 분포
+- **동일 빈도 동물**: Elephant, Zebra, Chicken, Goat, Shark, Panda, Duck (각 2회, 6.7%)
+- **희소 동물**: 16개 동물이 각각 1회만 등장 (전체의 53.3%)
+- **이 결과는 동물 선호도가 매우 고르게 분산되어 있음을 보여줌**
+
+### 선호 물건 분포
+- **동일 빈도 물건**: Sofa, Ball, Hat, Picture, Dress, Bracelet, Wallet (각 2회, 6.7%)
+- **희소 물건**: 16개 물건이 각각 1회만 등장 (전체의 53.3%)
+- **물건 선호도 역시 매우 고르게 분산됨**
+
+## 3. 이상치 및 특이점 분석
+
+### 강한 상관관계를 보이는 조합
+- **도시-동물 조합**: Amsterdam-Cat, Cape Town-Turkey, Copenhagen-Snake 등은 1:1 매핑 관계를 보임
+- **도시-물건 조합**: Atlanta-Chair, Beijing-Phone, Berlin-Pillow 등도 완벽한 상관관계를 보임
+- **이는 각 도시마다 고유한 동물과 물건 선호도가 존재함을 의미**
+
+### 독특한 선호 조합 식별
+- 전체 데이터의 20%가 독특한 선호 조합을 보임:
+  * Michael Clark (Naples, Shark, Coat)
+  * Joshua Martin (London, Hawk, Earrings)
+  * Donald Taylor (Paris, Guinea Pig, Computer)
+  * Patricia Sanchez (Buenos Aires, Frog, Painting)
+  * Lisa Rodriguez (London, Deer, Picture)
+  * Richard Scott (Zurich, Panda, Ball)
+
+## 4. 성씨별 선호도 패턴 분석
+
+- **Wright 가족**: 3명 모두 다른 도시(Buenos Aires, Los Angeles, Berlin), 동물(Goat, Chicken, Shark), 물건(Wallet, Dress, Pillow) 선호
+- **Green 가족**: 3명 모두 다른 도시(Naples, Geneva, Phoenix), 동물(Bee, Panda, Lion), 물건(Shirt, Ball, Bag) 선호
+- **Allen 가족**: 2명 모두 다른 도시(Atlanta, Zurich)와 다른 선호도 패턴 보임
+- **가족 내에서도 선호도 패턴이 매우 다양하여 유전적/환경적 요인에 의한 가족 유사성이 낮음을 시사**
+
+## 5. 전반적인 데이터 특성
+
+1. **희소성(Sparsity)**: 대부분의 범주가 1-2회만 출현하는 희소 데이터 특성을 보임
+2. **고른 분포**: 선호도가 매우 고르게 분산되어 있어 뚜렷한 추세나 집중 현상이 적음
+3. **높은 다양성**: 30명의 데이터에서 24개 도시, 23개 동물, 23개 물건이 등장하여 선호도의 다양성이 매우 높음
+4. **낮은 패턴성**: 성씨나 이름 간의 뚜렷한 선호도 패턴이 관찰되지 않음
+
+## 6. 결론
+
+분석 결과, 이 데이터셋은 매우 다양하고 고르게 분산된 선호도를 보이며, 특별한 패턴이나 집중 현상은 관찰되지 않았습니다. 각 개인은 매우 고유한 선호도 조합을 가지고 있으며, 같은 성씨를 가진 사람들 사이에서도 선호도의 유사성은 낮았습니다. 전체 데이터의 20%가 독특한 선호 조합을 보였으며, 이는 데이터의 다양성과 개인 선호의 고유성을 강조합니다.%
+```
 
 ## Reference
 
