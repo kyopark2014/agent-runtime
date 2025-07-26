@@ -167,6 +167,23 @@ code_interpreter_id = response["codeInterpreterId"]
 print(f"Code Interpreter ID: {code_interpreter_id}")
 ```
 
+아래는 code interpreter의 execution role에 대한 trust policy 입니다.
+
+```java
+ {
+   "Version":"2012-10-17",
+   "Statement":[
+      {
+         "Effect":"Allow",
+         "Principal":{
+            "Service":"bedrock-agentcore.amazonaws.com"
+         },
+         "Action":"sts:AssumeRole"
+      }
+   ]
+}
+```
+
 아래는 code interpreter동작에 필요한 기본 권한입니다.
 
 ```java
@@ -245,6 +262,24 @@ items = response['items']
 }
 ```
 
+### Code Interpreter의 결과를 전달하기 
+
+[Amazon Bedrock AgentCore - Developer Guide](https://docs.aws.amazon.com/pdfs/bedrock-agentcore/latest/devguide/bedrock-agentcore-dg.pdf)와 같이 code interpreter가 생성한 결과를 S3로 옮길 수 있습니다. 이때 execution role은 S3에 대한 권한을 가지고 있어야 합니다.
+
+```python
+print(f"Uploading generated artifact to S3")
+command_to_execute = f"aws s3 cp generated_data.csv s3://{S3_BUCKET_NAME}/output_artifacts/"
+response = bedrock_agentcore_client.invoke_code_interpreter(
+    codeInterpreterIdentifier=code_interpreter_id,
+    sessionId=session_id,
+    name="executeCommand",
+    arguments={
+        "command": command_to_execute
+    }
+)
+for event in response["stream"]:
+    print(json.dumps(event["result"], default=str, indent=2))
+```
 
 ### 상세 구현
 
@@ -314,6 +349,7 @@ for event in execute_response['stream']:
 "'contents/stock_prices.csv'의 내용을 분석해서 insight를 열거해보세요."와 같이 질문하면 아래와 같은 분석 결과를 얻을 수 있습니다.
 
 <img width="724" height="782" alt="image" src="https://github.com/user-attachments/assets/cd0a210c-97c9-4439-8168-7a2ca62bcce7" />
+
 
 
 ## Reference
