@@ -139,9 +139,62 @@ python code_interpreter.py
 
 ## MCP로 활용하기 (Boto3)
 
+### Built-in and Custom Code Interpreter
+
+AgentCore에서는 ID가 "aws.codeinterpreter.v1"인 built-in code interpreter를 제공하고 있습니다. 이 code interpreter는 AgentCore가 설치된 리전에 기본 설치가 되어 있어서 쉽게 사용할 수 있으며, 제한된 option으로 설정되어 있습니다. 
+
+Custom code interpreter를 생성하면, network setting으로 sandbox와 public을 설정할 수 있으며, execution role을 정의하여 사용하는 목적에 맞게 권한을 설정할 수 있습니다. 아래는 boto3로 code interpreter를 생성하는 예제입니다. executionRoleArn을 통해 사용하는 목적에 맞게 권한을 설정할 수 있습니다.
+
+```python
+import boto3
+# Initialize the boto3 client
+client = boto3.client(
+    'bedrock-agentcore-control',
+    region_name="us-west-2",
+    endpoint_url="https://bedrock-agentcore-control.us-west-2.amazonaws.com"
+)
+# Create a Code Interpreter
+response = client.create_code_interpreter(
+    name="myTestSandbox1",
+    description="Test code sandbox for development",
+    executionRoleArn="arn:aws:iam::123456789012:role/my-execution-role",
+    networkConfiguration={
+        "networkMode": "PUBLIC"
+    }
+)
+# Print the Code Interpreter ID
+code_interpreter_id = response["codeInterpreterId"]
+print(f"Code Interpreter ID: {code_interpreter_id}")
+```
+
+아래는 code interpreter동작에 필요한 기본 권한입니다.
+
+```java
+{
+   "Version":"2012-10-17",
+   "Statement":[
+      {
+         "Effect":"Allow",
+         "Action":[
+            "bedrock-agentcore:CreateCodeInterpreter",
+            "bedrock-agentcore:StartCodeInterpreterSession",
+            "bedrock-agentcore:InvokeCodeInterpreter",
+            "bedrock-agentcore:StopCodeInterpreterSession",
+            "bedrock-agentcore:DeleteCodeInterpreter",
+            "bedrock-agentcore:ListCodeInterpreters",
+            "bedrock-agentcore:GetCodeInterpreter",
+            "bedrock-agentcore:GetCodeInterpreterSession",
+            "bedrock-agentcore:ListCodeInterpreterSessions"
+         ],
+         "Resource":"arn:aws:bedrock-agentcore:*"
+      }
+   ]
+}
+```
+
 ### Boto3 APIs
 
-[start_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/start_code_interpreter_session.html)의 결과는 아래와 같습니다.
+[start_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/start_code_interpreter_session.html)의 결과는 아래와 같습니다. 
 
 ```java
 {
