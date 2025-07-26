@@ -56,7 +56,7 @@ items = response['items']
 ```
 
 
-## Coder Interpreter 구현
+## Coder Interpreter 구현 (AgentCore SDK)
 
 AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_interpreter.py](./code_interpreter.py)을 참조합니다.
 
@@ -189,7 +189,7 @@ python code_interpreter.py
 ```
 
 
-## MCP로 활용하기 
+## MCP로 활용하기 (Boto3)
 
 [mcp_server_agentcore_coder.py](./langgraph/mcp_server_agentcore_coder.py)와 같이 MCP 서버를 설정하고, [mcp_agentcore_coder.py](./langgraph/mcp_agentcore_coder.py)와 같이 구현합니다. 
 
