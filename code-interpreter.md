@@ -2,59 +2,6 @@
 
 AgentCore의 Code Interpreter는 서버리스 환경에서 안전하게 코드를 실행할 수 있도록 도와줍니다. 
 
-## APIs
-
-[start_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/start_code_interpreter_session.html)의 결과는 아래와 같습니다.
-
-```java
-{
-   "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
-   "sessionId":"01K12NP7J6E90BXX19AGA4S017",
-   "createdAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())"
-}
-```
-
-[list_code_interpreter_sessions](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/list_code_interpreter_sessions.html)을 이용하여 현재 READY인 세션을 확인합니다.
-
-```python
-response = client.list_code_interpreter_sessions(
-    codeInterpreterIdentifier='aws.codeinterpreter.v1',
-    maxResults=5,
-    status='READY'
-)
-items = response['items']
-```
-
-이에 대한 결과는 아래와 같습니다.
-
-```java
-{
-   "items":[
-      {
-         "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
-         "sessionId":"01K12NP7J6E90BXX19AGA4S017",
-         "name":"my-code-session",
-         "status":"READY",
-         "createdAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())",
-         "lastUpdatedAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())"
-      }
-   ]
-}
-```
-
-[get_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/get_code_interpreter_session.html)은 세션의 상태를 확인합니다.
-
-```java
-{
-   "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
-   "sessionId":"01K12Q3BYGCVWZBHMWAQNRR893",
-   "name":"my-code-session",
-   "createdAt":datetime.datetime(2025,7,26,6,35,35,220159,"tzinfo=tzutc())",
-   "sessionTimeoutSeconds":900,
-   "status":"READY"
-}
-```
-
 ## Coder Interpreter 구현 (AgentCore SDK)
 
 AgentCore의 code interpreter를 이용한 Code 실행에 대해 설명합니다. 상세한 코드는 [code_interpreter.py](./code_interpreter.py)을 참조합니다.
@@ -190,8 +137,63 @@ python code_interpreter.py
 분석 결과, 이 데이터셋은 매우 다양하고 고르게 분산된 선호도를 보이며, 특별한 패턴이나 집중 현상은 관찰되지 않았습니다. 각 개인은 매우 고유한 선호도 조합을 가지고 있으며, 같은 성씨를 가진 사람들 사이에서도 선호도의 유사성은 낮았습니다. 전체 데이터의 20%가 독특한 선호 조합을 보였으며, 이는 데이터의 다양성과 개인 선호의 고유성을 강조합니다.%
 ```
 
-
 ## MCP로 활용하기 (Boto3)
+
+### Boto3 APIs
+
+[start_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/start_code_interpreter_session.html)의 결과는 아래와 같습니다.
+
+```java
+{
+   "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
+   "sessionId":"01K12NP7J6E90BXX19AGA4S017",
+   "createdAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())"
+}
+```
+
+[list_code_interpreter_sessions](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/list_code_interpreter_sessions.html)을 이용하여 현재 READY인 세션을 확인합니다.
+
+```python
+response = client.list_code_interpreter_sessions(
+    codeInterpreterIdentifier='aws.codeinterpreter.v1',
+    maxResults=5,
+    status='READY'
+)
+items = response['items']
+```
+
+이에 대한 결과는 아래와 같습니다.
+
+```java
+{
+   "items":[
+      {
+         "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
+         "sessionId":"01K12NP7J6E90BXX19AGA4S017",
+         "name":"my-code-session",
+         "status":"READY",
+         "createdAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())",
+         "lastUpdatedAt":datetime.datetime(2025,7,26,6,10,56,149252,"tzinfo=tzutc())"
+      }
+   ]
+}
+```
+
+[get_code_interpreter_session](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/get_code_interpreter_session.html)은 세션의 상태를 확인합니다.
+
+```java
+{
+   "codeInterpreterIdentifier":"aws.codeinterpreter.v1",
+   "sessionId":"01K12Q3BYGCVWZBHMWAQNRR893",
+   "name":"my-code-session",
+   "createdAt":datetime.datetime(2025,7,26,6,35,35,220159,"tzinfo=tzutc())",
+   "sessionTimeoutSeconds":900,
+   "status":"READY"
+}
+```
+
+
+### 상세 구현
 
 [mcp_server_agentcore_coder.py](./langgraph/mcp_server_agentcore_coder.py)와 같이 MCP 서버를 설정하고, [mcp_agentcore_coder.py](./langgraph/mcp_agentcore_coder.py)와 같이 구현합니다. 
 
