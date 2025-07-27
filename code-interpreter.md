@@ -348,8 +348,89 @@ for event in execute_response['stream']:
 
 "'contents/stock_prices.csv'의 내용을 분석해서 insight를 열거해보세요."와 같이 질문하면 아래와 같은 분석 결과를 얻을 수 있습니다.
 
-<img width="724" height="782" alt="image" src="https://github.com/user-attachments/assets/cd0a210c-97c9-4439-8168-7a2ca62bcce7" />
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/cd0a210c-97c9-4439-8168-7a2ca62bcce7" />
 
+### Code Drawer의 구현
+
+[mcp_server_agentcore_coder.py](./langgraph/mcp_server_agentcore_coder.py)와 같이 agentcore_drawer를 tool로 등록합니다. 
+
+```python
+@mcp.tool()
+def agentcore_drawer(code):
+    """
+    Execute a Python script for draw a graph.
+    Since Python runtime cannot use external APIs, necessary data must be included in the code.
+    The graph should use English exclusively for all textual elements.
+    Do not save pictures locally bacause the runtime does not have filesystem.
+    When a comparison is made, all arrays must be of the same length.
+    code: the Python code was written in English
+    return: the url of graph
+    """ 
+    logger.info(f"agentcore_drawer --> code:\n {code}")
+    
+    return coder.agentcore_drawer(code)
+```
+
+[mcp_agentcore_coder.py](./langgraph/mcp_agentcore_coder.py)와 같이 LLM이 생성한 code에 base64로 변환하여 print 하도록 합니다. 이후 print로 전달된 결과를 png 파일로 변환하여 S3에 저장하고 경로를 리턴합니다.
+
+```python
+def agentcore_drawer(code):
+    code = re.sub(r"seaborn", "classic", code)
+    code = re.sub(r"plt.savefig", "#plt.savefig", code)
+    code = re.sub(r"plt.show", "#plt.show", code)
+
+    post = """\n
+import io
+import base64
+buffer = io.BytesIO()
+plt.savefig(buffer, format='png')
+buffer.seek(0)
+image_base64 = base64.b64encode(buffer.getvalue()).decode()
+
+print(image_base64)
+"""
+    code = code + post    
+    logger.info(f"code: {code}")
+
+    # get the sessionId
+    sessionId = get_code_interpreter_sessionId()
+    
+    execute_response = client.invoke_code_interpreter(
+        codeInterpreterIdentifier="aws.codeinterpreter.v1",
+        sessionId=sessionId,
+        name="executeCode",
+        arguments={
+            "language": "python",
+            "code": code
+        }
+    )
+
+    result_text = ""
+    for event in execute_response['stream']:
+        if 'result' in event:
+            result = event['result']
+            if 'content' in result:
+                for content_item in result['content']:
+                    if content_item['type'] == 'text':
+                        result_text = content_item['text']
+                        logger.info(f"result: {result_text}")
+    
+    base64Img = result_text
+            
+    if base64Img:
+        byteImage = BytesIO(base64.b64decode(base64Img))
+
+        image_name = generate_short_uuid()+'.png'
+        url = upload_to_s3(byteImage, image_name)
+        file_name = url[url.rfind('/')+1:]
+        image_url = path+'/'+s3_image_prefix+'/'+parse.quote(file_name)
+
+    return {"path": image_url}
+```
+
+"gaussian 그래프를 그려주세요."라고 입력하면, tool중에 agentcore_drawer가 실행되어 아래와 같이 그래프를 그릴 수 있습니다.
+
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/d55d4c10-67cd-4e96-be8a-121348f21929" />
 
 
 ## Reference
