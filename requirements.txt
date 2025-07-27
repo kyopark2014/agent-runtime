@@ -37,3 +37,4 @@ strands-agents-tools
 reportlab
 bedrock-agentcore
 bedrock-agentcore-starter-toolkit
+nova-act
