@@ -42,6 +42,21 @@ def agentcore_coder(code):
 
     return coder.agentcore_coder(code)
 
+@mcp.tool()
+def agentcore_drawer(code):
+    """
+    Execute a Python script for draw a graph.
+    Since Python runtime cannot use external APIs, necessary data must be included in the code.
+    The graph should use English exclusively for all textual elements.
+    Do not save pictures locally bacause the runtime does not have filesystem.
+    When a comparison is made, all arrays must be of the same length.
+    code: the Python code was written in English
+    return: the url of graph
+    """ 
+    logger.info(f"agentcore_drawer --> code:\n {code}")
+    
+    return coder.agentcore_drawer(code)
+
 if __name__ =="__main__":
     print(f"###### main ######")
     mcp.run(transport="stdio")
