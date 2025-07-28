@@ -66,6 +66,22 @@ with browser_session(bedrock_region) as client:
 	    result = str(result)
 ```
 
+[mcp_server_browser.py](https://github.com/kyopark2014/mcp/blob/main/application/mcp_server_browser.py)와 MCP tool을 준비합니다.
+
+```python
+@mcp.tool()
+def browser_search(keyword: str) -> str:
+    """
+    Search web site with the given keyword.
+    keyword: the keyword to search
+    return: the result of search
+    """
+    logger.info(f"browser --> keyword: {keyword}")
+
+    return browser.live_view_with_nova_act(keyword)
+```
+
+
 
 ## 실행 결과
 
