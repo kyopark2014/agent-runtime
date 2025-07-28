@@ -21,6 +21,14 @@ with NovaAct(starting_page="https://www.amazon.com") as nova:
 	nova.act("search for a coffee maker")
 ```
 
+## 실행 결과
+
+<img width="1217" height="808" alt="image" src="https://github.com/user-attachments/assets/3b2c9ae5-dc94-4d69-bbde-76a049c6b151" />
+
+<img width="798" height="762" alt="image" src="https://github.com/user-attachments/assets/54e19bb1-a2de-4ce8-b958-4f2544a31a35" />
+
+
+
 ## Refernece
 
 [Introducing Amazon Nova Act](https://labs.amazon.science/blog/nova-act)
