@@ -78,7 +78,8 @@ export class BedrockAgentCoreLiveViewer {
                         statusCode: error.statusCode,
                         stack: error.stack
                     });
-                    reject(error);
+                    // Don't show error to user, just reject silently
+                    reject(new Error('Connection failed'));
                 },
                 success: (auth, result) => {
                     console.log('[BedrockAgentCoreLiveViewer] DCV auth success:', result);
@@ -113,7 +114,8 @@ export class BedrockAgentCoreLiveViewer {
                 },
                 error: (error) => {
                     console.error('[BedrockAgentCoreLiveViewer] Connection error:', error);
-                    reject(error);
+                    // Don't show error to user, just reject silently
+                    reject(new Error('Connection failed'));
                 },
                 httpExtraSearchParams: this.httpExtraSearchParamsCallBack.bind(this),
                 displayLayout: this.displayLayoutCallback.bind(this)
@@ -129,7 +131,8 @@ export class BedrockAgentCoreLiveViewer {
         })
         .catch(error => {
             console.error('[BedrockAgentCoreLiveViewer] Connect failed:', error);
-            reject(error);
+            // Don't show error to user, just reject silently
+            reject(new Error('Connection failed'));
         });
     }
 

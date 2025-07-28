@@ -53,7 +53,7 @@ with st.sidebar:
         mcp_options = [
             "basic", "tavily-search", "aws-api", "aws-knowledge", "aws document", 
             "use_aws", "repl coder","agentcore coder", "knowledge base",     
-            "perplexity", "wikipedia",  
+            "perplexity", "wikipedia", "agentcore-browser",
             "filesystem", "terminal", "text editor", "context7", "puppeteer", 
             "playwright", "airbnb",  
             "pubmed", "chembl", "clinicaltrial", "arxiv"  # "ArXiv" "firecrawl" "obsidian"

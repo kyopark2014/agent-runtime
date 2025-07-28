@@ -1,20 +1,22 @@
 """
-Live-view browser tool with Amazon Nova Act SDK
+Browser tool with Amazon Nova Act SDK (no viewer)
 source: https://github.com/awslabs/amazon-bedrock-agentcore-samples/blob/main/01-tutorials/05-AgentCore-tools/02-Agent-Core-browser-tool/01-browser-with-NovaAct/02_agentcore-browser-tool-live-view-with-nova-act.ipynb
 """
 
 from bedrock_agentcore.tools.browser_client import browser_session
 from nova_act import NovaAct
 from rich.console import Console
-from rich.panel import Panel
-import threading
-import queue
-from interactive_tools.browser_viewer import BrowserViewerServer
 import logging
 import sys
 import json
 import boto3
 import os
+import threading
+import queue
+import time
+
+# Disable asyncio for Playwright to avoid conflicts
+os.environ["PLAYWRIGHT_ASYNCIO_OFF"] = "1"
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -81,11 +83,11 @@ except Exception as e:
     # raise e
     pass
 
-def _nova_act_worker(prompt, ws_url, headers, result_queue, error_queue):
-    """NovaAct worker function"""
+def _run_nova_act_in_thread(ws_url, headers, prompt, nova_act_key, starting_page, result_queue):
+    """Run NovaAct in a separate thread to avoid asyncio loop conflicts."""
     try:
-        print(f"NovaAct API key length: {len(nova_act_key) if nova_act_key else 0}")
-        print(f"NovaAct API key set: {bool(nova_act_key)}")
+        # Ensure we're in a clean thread environment
+        print(f"Starting NovaAct in thread {threading.current_thread().name}")
         
         with NovaAct(
             cdp_endpoint_url=ws_url,
@@ -104,90 +106,63 @@ def _nova_act_worker(prompt, ws_url, headers, result_queue, error_queue):
             # Create a simple result message
             final_result = f"Successfully searched for '{prompt}' on Amazon. The search results are now visible in the browser. You can view the products, prices, and descriptions in the browser window."
             
-            result_queue.put(final_result)
+            result_queue.put(("success", final_result))
+            
     except Exception as e:
-        print(f"NovaAct error: {e}")
-        error_queue.put(e)
+        print(f"Error in NovaAct thread: {e}")
+        import traceback
+        traceback.print_exc()
+        result_queue.put(("error", f"Browser search failed: {str(e)}"))
 
-def live_view_with_nova_act(prompt):
-    """Run the browser live viewer with display sizing."""
-    console.print(
-        Panel(
-            "[bold cyan]Browser Live Viewer[/bold cyan]\n\n"
-            "This demonstrates:\n"
-            "• Live browser viewing with DCV\n"
-            "• Configurable display sizes (not limited to 900×800)\n"
-            "• Proper display layout callbacks\n\n"
-            "[yellow]Note: Requires Amazon DCV SDK files[/yellow]",
-            title="Browser Live Viewer",
-            border_style="blue",
-        )
-    )
-
+def browser_with_nova_act(prompt):
+    """Run browser automation with Nova Act without viewer using threading to avoid asyncio conflicts."""
     result = None  # Initialize result variable
-    viewer = None
     
     try:
         # Step 1: Create browser session
         with browser_session(bedrock_region) as client:
             ws_url, headers = client.generate_ws_headers()
 
-            # Step 2: Start viewer server
-            console.print("\n[cyan]Step 3: Starting viewer server...[/cyan]")
-            viewer = BrowserViewerServer(client, port=8000)
-            viewer_url = viewer.start(open_browser=True)
-
-            # Step 3: Show features
-            console.print("\n[bold green]Viewer Features:[/bold green]")
-            console.print(
-                "• Default display: 1600×900 (configured via displayLayout callback)"
-            )
-            console.print("• Size options: 720p, 900p, 1080p, 1440p")
-            console.print("• Real-time display updates")
-            console.print("• Take/Release control functionality")
-
-            console.print("\n[yellow]Press Ctrl+C to stop[/yellow]")
-
-            # Step 4: Use Nova Act in separate thread to avoid asyncio conflicts
+            # Step 2: Use Nova Act in a separate thread
+            console.print(f"\n[cyan]Executing NovaAct with prompt: {prompt}[/cyan]")
+            
+            print(f"NovaAct API key length: {len(nova_act_key) if nova_act_key else 0}")
+            print(f"NovaAct API key set: {bool(nova_act_key)}")
+            
+            # Create a queue to get results from the thread
             result_queue = queue.Queue()
-            error_queue = queue.Queue()
             
+            # Create and start the thread with a descriptive name
             nova_thread = threading.Thread(
-                target=_nova_act_worker,
-                args=(prompt, ws_url, headers, result_queue, error_queue)
+                target=_run_nova_act_in_thread,
+                args=(ws_url, headers, prompt, nova_act_key, starting_page, result_queue),
+                name="NovaAct-Thread",
+                daemon=False  # Ensure thread completes before main thread exits
             )
+            
+            print(f"Starting NovaAct thread: {nova_thread.name}")
             nova_thread.start()
-            nova_thread.join()  # Wait for completion
             
-            # Check for errors first
-            if not error_queue.empty():
-                error = error_queue.get()
-                raise error
+            # Wait for the thread to complete with timeout
+            nova_thread.join(timeout=300)  # 5 minutes timeout
             
-            # Get result
-            if not result_queue.empty():
-                result = result_queue.get()
-                console.print(f"\n[bold green]Final Result:[/bold green] {result}")
+            # Check if thread is still alive (timed out)
+            if nova_thread.is_alive():
+                print("NovaAct thread timed out after 5 minutes")
+                result = "Browser search timed out after 5 minutes"
+            else:
+                # Get the result from the queue
+                if not result_queue.empty():
+                    status, thread_result = result_queue.get(timeout=10)
+                    result = thread_result
+                else:
+                    result = "Browser search completed without result"
                 
-                # Ensure result is a string
-                if not isinstance(result, str):
-                    result = str(result)
-    
     except Exception as e:
         console.print(f"\n[red]Error: {e}[/red]")
         import traceback
         traceback.print_exc()
         result = f"Browser search failed: {str(e)}"
-    finally:
-        console.print("\n\n[yellow]Shutting down...[/yellow]")
-        
-        # Clean up viewer server safely
-        if viewer is not None:
-            try:
-                viewer.stop()
-                console.print("✅ Viewer server stopped")
-            except Exception as viewer_error:
-                console.print(f"⚠️ Error stopping viewer server: {viewer_error}")
     
     # Ensure we always return a string
     if result is None:
@@ -197,9 +172,9 @@ def live_view_with_nova_act(prompt):
     
     return result
 
-
 if __name__ == "__main__":
-    result = live_view_with_nova_act(
-        prompt="Go to Amazon.com and search for coffee maker")
-
+    result = browser_with_nova_act(
+        prompt="Go to Amazon.com and search for coffee maker"
+    )
+    
     console.print(f"\n[bold green]Nova Act Result:[/bold green] {result}")

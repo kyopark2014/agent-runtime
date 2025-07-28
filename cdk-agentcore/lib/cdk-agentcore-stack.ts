@@ -277,6 +277,15 @@ export class CdkAgentcoreStack extends cdk.Stack {
       },
     });
 
+    const novaActSecret = new secretsmanager.Secret(this, `nova-act-secret-for-${projectName}`, {
+      description: 'secret for nova act api key', // nova act
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      secretName: `nova-act-${projectName}`,
+      secretObjectValue: {
+        project_name: cdk.SecretValue.unsafePlainText(projectName),
+        nova_act_api_key: cdk.SecretValue.unsafePlainText(''),
+      },
+    });
 
     // lambda-rag
     const roleLambdaRag = new iam.Role(this, `role-lambda-rag-for-${projectName}`, {
@@ -414,6 +423,7 @@ export class CdkAgentcoreStack extends cdk.Stack {
     weatherApiSecret.grantRead(agentRuntimeRole);
     tavilyApiSecret.grantRead(agentRuntimeRole);
     perplexityApiSecret.grantRead(agentRuntimeRole);    
+    novaActSecret.grantRead(agentRuntimeRole);
 
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
       resources: ['*'],

@@ -76,6 +76,21 @@ def get_agent_runtime_arn():
     else:
         return None
 
+# agent_runtime_arn
+# agent_runtime_arn = get_agent_runtime_arn() # not supported in docker
+# logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
+
+fname = 'agent_runtime_arn.json'
+agent_runtime_arn = None
+try:
+    with open(fname, 'r') as f:
+        config = json.load(f)
+        agent_runtime_arn = config['agent_runtime_arn']
+        logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
+except Exception as e:
+    logger.info(f"No agent_runtime_arn.json")
+    pass
+
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):
         content_type = "image/jpeg"
@@ -198,6 +213,26 @@ except Exception as e:
     logger.info(f"perplexity credential is required: {e}")
     # raise e
     pass
+
+# api key to use nova act
+nova_act_key = ""
+try:
+    get_nova_act_api_secret = secretsmanager.get_secret_value(
+        SecretId=f"nova-act-apikey-{projectName}"
+    )
+    #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
+    secret = json.loads(get_nova_act_api_secret['SecretString'])
+    #print('secret: ', secret)
+
+    if "nova_act_api_key" in secret:
+        nova_act_key = secret['nova_act_api_key']
+        #print('nova_act_api_key: ', nova_act_api_key)
+
+except Exception as e: 
+    logger.info(f"nova act credential is required: {e}")
+    # raise e
+    pass
+
 
 async def generate_pdf_report(report_content: str, filename: str) -> str:
     """

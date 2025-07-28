@@ -139,7 +139,8 @@ export class BedrockAgentCoreLiveViewer {
                         statusCode: error.statusCode,
                         stack: error.stack
                     });
-                    reject(error);
+                    // Don't show error to user, just reject silently
+                    reject(new Error('Connection failed'));
                 },
                 success: (auth, result) => {
                     console.log('[BedrockAgentCoreLiveViewer] DCV auth success:', result);
@@ -174,7 +175,8 @@ export class BedrockAgentCoreLiveViewer {
                 },
                 error: (error) => {
                     console.error('[BedrockAgentCoreLiveViewer] Connection error:', error);
-                    reject(error);
+                    // Don't show error to user, just reject silently
+                    reject(new Error('Connection failed'));
                 },
                 httpExtraSearchParams: this.httpExtraSearchParamsCallBack.bind(this),
                 displayLayout: this.displayLayoutCallback.bind(this)
@@ -190,7 +192,8 @@ export class BedrockAgentCoreLiveViewer {
         })
         .catch(error => {
             console.error('[BedrockAgentCoreLiveViewer] Connect failed:', error);
-            reject(error);
+            // Don't show error to user, just reject silently
+            reject(new Error('Connection failed'));
         });
     }
 
@@ -569,12 +572,12 @@ button.active {
                 <button onclick="setSize(1920, 1080)" id="size-1080">1920×1080</button>
                 <button onclick="setSize(2560, 1440)" id="size-1440">2560×1440</button>
             </div>
-            <span id="status">Initializing...</span>
+            <span id="status" style="display: none;">Ready</span>
         </div>
     </div>
     
-    <!-- Debug info panel -->
-    <div id="debug-info"></div>
+    <!-- Debug info panel (hidden) -->
+    <div id="debug-info" style="display: none;"></div>
     
     <!-- Configure DCV worker path -->
     <script>
@@ -590,12 +593,12 @@ button.active {
     <script type="module">
         import {{ BedrockAgentCoreLiveViewer }} from '/static/js/bedrock-agentcore-browser-viewer.js';
         
-        // Debug logging
+        // Debug logging (disabled)
         const debugInfo = document.getElementById('debug-info');
         function log(message) {{
             console.log(message);
-            debugInfo.innerHTML += message + '<br>';
-            debugInfo.scrollTop = debugInfo.scrollHeight;
+            // debugInfo.innerHTML += message + '<br>';
+            // debugInfo.scrollTop = debugInfo.scrollHeight;
         }}
         
         // Global viewer instance
@@ -678,7 +681,8 @@ button.active {
         }};
         
         function updateStatus(message) {{
-            document.getElementById('status').textContent = message;
+            // Don't show status messages to user
+            // document.getElementById('status').textContent = message;
             log('[Main] Status: ' + message);
         }}
         
@@ -705,7 +709,8 @@ button.active {
                 
             }} catch (error) {{
                 console.error('Failed to initialize viewer:', error);
-                updateStatus('Error: ' + error.message);
+                // Don't show error messages to user
+                updateStatus('Connecting...');
                 log('[Main] ERROR: ' + error.message);
                 log('[Main] Stack: ' + (error.stack || 'No stack trace'));
                 

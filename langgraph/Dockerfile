@@ -70,7 +70,7 @@ RUN pip install PyPDF2 reportlab
 RUN pip install Pillow colorama
 
 # Additional utilities
-RUN pip install requests uuid
+RUN pip install requests uuid playwright nova-act
 
 COPY . .
 
