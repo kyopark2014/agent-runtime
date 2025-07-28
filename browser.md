@@ -1,5 +1,7 @@
 # AgentCore Browser
 
+AgentCore Browser Tool을 이용하면 생성형 AI 애플리케이션이 브라우저를 제어하여 안전한 검색을 수행할 수 있습니다.
+
 ## Nova Act
 현재(2025.7) Nova Act는 Preview이며 한국에서 사용이 불가하므로 vpn을 이용해 amazon.com 아이디로 key를 발급한후 아래와 같이 사용준비를 합니다.
 
