@@ -28,6 +28,7 @@ with NovaAct(starting_page="https://www.amazon.com") as nova:
 Nova Act와 playwright를 이용하여 아래와 같이 prompt에 대한 검색 결과를 얻을 수 있습니다. 상세코드는 [mcp_browser.py](https://github.com/kyopark2014/mcp/blob/main/application/mcp_browser.py)을 참조합니다.
 
 ```python
+starting_page = "https://www.google.com"
 with NovaAct(
     cdp_endpoint_url=ws_url,
     cdp_headers=headers,
