@@ -85,13 +85,21 @@ def browser_search(keyword: str) -> str:
 
 ## 실행 결과
 
-"Search a coffee maker."로 질문하면 아래와 같이 browser를 이용하여 "coffee maker"를 검색합니다.
+starting_page를 "wwww.amazon.com"으로 설정한 후 "Search a coffee maker."로 질문하면 아래와 같이 browser를 이용하여 "coffee maker"를 검색합니다.
 
 <img width="1217" height="808" alt="image" src="https://github.com/user-attachments/assets/3b2c9ae5-dc94-4d69-bbde-76a049c6b151" />
 
 이때 얻어진 결과를 바탕으로 아래와 같이 답변합니다.
 
 <img width="798" height="762" alt="image" src="https://github.com/user-attachments/assets/54e19bb1-a2de-4ce8-b958-4f2544a31a35" />
+
+일반적인 목적에 맞게 starting_point를 "www.google.com"으로 설정한 후에 "https://github.com/awslabs/amazon-bedrock-agentcore-samples/tree/main 의 내용을 요약하세요."와 같이 문의합니다. 이때 아래와 같이 입력된 정보를 기반으로 검색을 수행합니다.
+
+<img width="723" height="629" alt="image" src="https://github.com/user-attachments/assets/29c7ce18-ce26-4832-8bc8-d36d271657c9" />
+
+결과적으로 얻어진 검색 결과는 아래와 같습니다.
+
+<img width="727" height="654" alt="image" src="https://github.com/user-attachments/assets/b7fe446f-5c09-4940-b5af-35622774aa6d" />
 
 
 ## Refernece
