@@ -92,15 +92,16 @@ After setting the starting_page to "www.amazon.com" and asking "Search a coffee 
 
 Based on the results obtained, it responds as follows.
 
-<img width="700" alt="image" src="https://github.com/user-attachments/assets/54e19bb1-a2de-4ce8-b958-b2544a31a35" />
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/54e19bb1-a2de-4ce8-b958-4f2544a31a35" />
 
 For general purposes, set the starting_point to "www.google.com" and then ask questions like "Please summarize the content of https://github.com/awslabs/amazon-bedrock-agentcore-samples/tree/main." At this time, it performs searches based on the entered information as follows.
 
-<img width="700" alt="image" src="https://github.com/user-attachments/assets/29c7ce18-ce26-4832-bc8-d36d271657c9" />
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/29c7ce18-ce26-4832-8bc8-d36d271657c9" />
 
 The search results ultimately obtained are as follows.
 
-<img width="700" alt="image" src="https://github.com/user-attachments/assets/b7fe446f-5c09-4940-baf-35622774aa6d" />
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/b7fe446f-5c09-4940-b5af-35622774aa6d" />
+
 
 
 ## Reference
