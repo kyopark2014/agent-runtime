@@ -549,7 +549,7 @@ def init_memory():
         for memory in memories:            
             logger.info(f"Memory ID: {memory.get('id')}")
             memory_name = memory.get('id').split("-")[0]
-            if memory_name == utils.projectName+'_'+agent_type:
+            if memory_name == utils.projectName:
                 logger.info(f"The memory of {memory_name} was found")
                 memory_id = memory.get('id')
                 logger.info(f"Memory Arn: {memory.get('arn')}")
@@ -557,7 +557,7 @@ def init_memory():
 
         if memory_id is None:  # no memory_id found, create new memory_id
             result = memory_client.create_memory(
-                name=utils.projectName+'_'+agent_type,
+                name=utils.projectName,
                 description=f"Memory for {utils.projectName}",
                 event_expiry_days=365, # 7 - 365 days
                 # memory_execution_role_arn=memory_execution_role_arn
