@@ -1,14 +1,24 @@
 import boto3
-import utils
 import json
 import os
 
-from bedrock_agentcore.memory import MemoryClient
+def load_config():
+    config = None
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "config.json")
+    
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    
+    return config
 
-projectName = utils.projectName
-aws_region = utils.bedrock_region
-agent_runtime_role = utils.agent_runtime_role
-accountId = utils.accountId
+config = load_config()
+
+aws_region = config['region']
+accountId = config['accountId']
+projectName = config['projectName']
+agent_runtime_role = config['agent_runtime_role']
 
 current_folder_name = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
 target = current_folder_name.split('/')[-1]
@@ -49,6 +59,26 @@ if len(agentRuntimes) > 0:
             isExist = True        
             break
 
+def update_agentcore_json(agentRuntimeArn):
+    fname = 'agentcore.json'        
+    try:
+        with open(fname, 'r') as f:
+            config = json.load(f)        
+        config['agent_runtime_arn'] = agentRuntimeArn            
+        with open(fname, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+        print(f"{fname} updated")
+    except Exception as e:
+        print(f"[ERROR] {e}")
+        print(f"agentRuntimeArn is not found")        
+        config = {
+            'agent_runtime_arn': agentRuntimeArn
+        }
+        with open(fname, 'w', encoding='utf-8') as f:
+            json.dump(config, f, ensure_ascii=False, indent=4)
+        print(f"{fname} was created")
+        pass
+
 # Check for duplicate Agent Runtime name
 def create_agent_runtime():
     runtime_name = targetAgentRuntime
@@ -58,7 +88,6 @@ def create_agent_runtime():
     # create agent runtime
     agentRuntimeArn = None
     try:        
-        # create agent runtime
         response = client.create_agent_runtime(
             agentRuntimeName=runtime_name,
             agentRuntimeArtifact={
@@ -77,50 +106,7 @@ def create_agent_runtime():
     except client.exceptions.ConflictException as e:
         print(f"[ERROR] ConflictException: {e}")
 
-    # create memory
-    print(f"create agent memory!")    
-    print(f"Trying to create memory: {runtime_name}")
-
-    memoryId = None
-    try:
-        memory_client = MemoryClient(region_name=aws_region)
-        memories = memory_client.list_memories()
-        print(f"memories: {memories}")
-
-        result = memory_client.create_memory(
-            name=runtime_name,
-            description=f"Memory for {runtime_name}",
-            event_expiry_days=7, # 7 - 365 days
-            # memory_execution_role_arn=memory_execution_role_arn
-        )
-        print(f"result of create memory: {result}") 
-        
-        if "memoryId" in result:
-            memoryId = result['memoryId']
-            print(f"memoryId: {memoryId}")
-        else:
-            print(f"memoryId is not found")
-            
-    except Exception as e:
-        print(f"[ERROR] {e}")
-        pass   
-
-    try:
-        fname = 'agentcore.json'
-        with open(fname, 'r') as f:
-            config = json.load(f)
-        
-        if agentRuntimeArn is not None:
-            config['agent_runtime_arn'] = agentRuntimeArn
-        if memoryId is not None:
-            config['memory_id'] = memoryId
-            
-        with open(fname, 'w') as f:
-            json.dump(config, f)
-        print(f"{fname} updated")
-    except Exception as e:
-        print(f"[ERROR] {e}")
-        pass   
+    update_agentcore_json(agentRuntimeArn)
 
 def update_agent_runtime():
     print(f"update agent runtime: {targetAgentRuntime}")
@@ -138,6 +124,10 @@ def update_agent_runtime():
         protocolConfiguration={"serverProtocol":"HTTP"}
     )
     print(f"response: {response}")
+
+    agentRuntimeArn = response['agentRuntimeArn']
+    print(f"agentRuntimeArn: {agentRuntimeArn}")
+    update_agentcore_json(agentRuntimeArn)
 
 print(f"isExist: {isExist}")
 if isExist:

@@ -1,1 +1,3 @@
-{"agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_strands-wv0SWFCFN0", "memory_id": "agentcore_strands-ExKWjA6jmH"}
+{
+    "agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_strands-wv0SWFCFN0"
+}

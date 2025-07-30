@@ -42,54 +42,23 @@ config = load_config()
 bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
-agent_runtime_role = config['agent_runtime_role']
 
-def get_agent_runtime_arn():
-    client = boto3.client('bedrock-agentcore-control', region_name=bedrock_region)
-    response = client.list_agent_runtimes()
-    logger.info(f"response: {response}")
-
-    current_folder_name = os.path.basename(os.path.dirname(os.path.abspath(__file__)))
-    target = current_folder_name.split('/')[-1]
-    logger.info(f"target: {target}")
-
-    isExist = False
-    agentRuntimeId = None
-    targetAgentRuntime = projectName.replace('-', '_')+'_'+target
-    logger.info(f"targetAgentRuntime: {targetAgentRuntime}")
-
-    agentRuntimes = response['agentRuntimes']
-    for agentRuntime in agentRuntimes:
-        agentRuntimeName = agentRuntime['agentRuntimeName']
-        logger.info(f"agentRuntimeName: {agentRuntimeName}")
-        if agentRuntimeName == targetAgentRuntime:
-            logger.info(f"agentRuntimeName: {agentRuntimeName} is already exists")
-            agentRuntimeId = agentRuntime['agentRuntimeId']
-            logger.info(f"agentRuntimeId: {agentRuntimeId}")
-            agentRuntimeArn = agentRuntime['agentRuntimeArn']
-            logger.info(f"agentRuntimeArn: {agentRuntimeArn}")
-            isExist = True        
-            break
+def load_agentcore_config():
+    memory_id = None
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        agentcore_path = os.path.join(script_dir, "agentcore.json")
+        with open(agentcore_path, "r", encoding="utf-8") as f:
+            json_data = json.load(f)
+            memory_id = json_data['memory_id']
+            logger.info(f"memory_id: {memory_id}")
+    except Exception as e:        
+        logger.error(f"Error loading agentcore config: {e}")
+        pass
     
-    if isExist:
-        return agentRuntimeArn
-    else:
-        return None
+    return memory_id
 
-# agent_runtime_arn
-# agent_runtime_arn = get_agent_runtime_arn() # not supported in docker
-# logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
-
-fname = 'agent_runtime_arn.json'
-agent_runtime_arn = None
-try:
-    with open(fname, 'r') as f:
-        config = json.load(f)
-        agent_runtime_arn = config['agent_runtime_arn']
-        logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
-except Exception as e:
-    logger.info(f"No agent_runtime_arn.json")
-    pass
+memory_id = load_agentcore_config()
 
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):
@@ -154,7 +123,9 @@ try:
     get_weather_api_secret = secretsmanager.get_secret_value(
         SecretId=f"openweathermap-{projectName}"
     )
+    #print('get_weather_api_secret: ', get_weather_api_secret)
     secret = json.loads(get_weather_api_secret['SecretString'])
+    #print('secret: ', secret)
     weather_api_key = secret['weather_api_key']
 
 except Exception as e:
@@ -167,10 +138,13 @@ try:
     get_tavily_api_secret = secretsmanager.get_secret_value(
         SecretId=f"tavilyapikey-{projectName}"
     )
+    #print('get_tavily_api_secret: ', get_tavily_api_secret)
     secret = json.loads(get_tavily_api_secret['SecretString'])
+    #print('secret: ', secret)
 
     if "tavily_api_key" in secret:
         tavily_key = secret['tavily_api_key']
+        #print('tavily_api_key: ', tavily_api_key)
 
         if tavily_key:
             tavily_api_wrapper = TavilySearchAPIWrapper(tavily_api_key=tavily_key)
@@ -183,20 +157,21 @@ except Exception as e:
     # raise e
     pass
 
-# # api key to use firecrawl Search
-# firecrawl_key = ""
-# try:
-#     get_firecrawl_secret = secretsmanager.get_secret_value(
-#         SecretId=f"firecrawlapikey-{projectName}"
-#     )
-#     secret = json.loads(get_firecrawl_secret['SecretString'])
+# api key to use firecrawl Search
+firecrawl_key = ""
+try:
+    get_firecrawl_secret = secretsmanager.get_secret_value(
+        SecretId=f"firecrawlapikey-{projectName}"
+    )
+    secret = json.loads(get_firecrawl_secret['SecretString'])
 
-#     if "firecrawl_api_key" in secret:
-#         firecrawl_key = secret['firecrawl_api_key']
-# except Exception as e: 
-#     logger.info(f"Firecrawl credential is required: {e}")
-#     # raise e
-#     pass
+    if "firecrawl_api_key" in secret:
+        firecrawl_key = secret['firecrawl_api_key']
+        # print('firecrawl_api_key: ', firecrawl_key)
+except Exception as e: 
+    logger.info(f"Firecrawl credential is required: {e}")
+    # raise e
+    pass
 
 # api key to use perplexity Search
 perplexity_key = ""
@@ -204,10 +179,13 @@ try:
     get_perplexity_api_secret = secretsmanager.get_secret_value(
         SecretId=f"perplexityapikey-{projectName}"
     )
+    #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
     secret = json.loads(get_perplexity_api_secret['SecretString'])
+    #print('secret: ', secret)
 
     if "perplexity_api_key" in secret:
         perplexity_key = secret['perplexity_api_key']
+        #print('perplexity_api_key: ', perplexity_api_key)
 
 except Exception as e: 
     logger.info(f"perplexity credential is required: {e}")
@@ -218,7 +196,7 @@ except Exception as e:
 nova_act_key = ""
 try:
     get_nova_act_api_secret = secretsmanager.get_secret_value(
-        SecretId=f"nova-act-apikey-{projectName}"
+        SecretId=f"novaactapikey-{projectName}"
     )
     #print('get_perplexity_api_secret: ', get_perplexity_api_secret)
     secret = json.loads(get_nova_act_api_secret['SecretString'])
@@ -232,7 +210,6 @@ except Exception as e:
     logger.info(f"nova act credential is required: {e}")
     # raise e
     pass
-
 
 async def generate_pdf_report(report_content: str, filename: str) -> str:
     """

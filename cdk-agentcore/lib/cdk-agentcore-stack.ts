@@ -277,10 +277,20 @@ export class CdkAgentcoreStack extends cdk.Stack {
       },
     });
 
+    const firecrawlApiSecret = new secretsmanager.Secret(this, `firecrawl-secret-for-${projectName}`, {
+      description: 'secret for firecrawl api key', // firecrawl
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      secretName: `firecrawlapikey-${projectName}`,
+      secretObjectValue: {
+        project_name: cdk.SecretValue.unsafePlainText(projectName),
+        firecrawl_api_key: cdk.SecretValue.unsafePlainText(''),
+      },
+    });
+
     const novaActSecret = new secretsmanager.Secret(this, `nova-act-secret-for-${projectName}`, {
       description: 'secret for nova act api key', // nova act
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      secretName: `nova-act-${projectName}`,
+      secretName: `novaactapikey-${projectName}`,
       secretObjectValue: {
         project_name: cdk.SecretValue.unsafePlainText(projectName),
         nova_act_api_key: cdk.SecretValue.unsafePlainText(''),
@@ -423,6 +433,7 @@ export class CdkAgentcoreStack extends cdk.Stack {
     weatherApiSecret.grantRead(agentRuntimeRole);
     tavilyApiSecret.grantRead(agentRuntimeRole);
     perplexityApiSecret.grantRead(agentRuntimeRole);    
+    firecrawlApiSecret.grantRead(agentRuntimeRole);
     novaActSecret.grantRead(agentRuntimeRole);
 
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
