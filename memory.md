@@ -183,3 +183,5 @@ Memory의 모든 동작은 Memory ID가 반드시 필요한데, [list_memories](
 ## Reference
 
 [Amazon Bedrock AgentCore Memory](https://github.com/awslabs/amazon-bedrock-agentcore-samples/tree/main/01-tutorials/04-AgentCore-memory)
+
+[tool - agent_core_memory.py](https://github.com/strands-agents/tools/blob/main/src/strands_tools/agent_core_memory.py)
