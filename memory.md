@@ -179,3 +179,7 @@ logger.info(f"conversations: {conversations}")
 ## 메모리 ID의 처리
 
 Memory의 모든 동작은 Memory ID가 반드시 필요한데, [list_memories](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/list_memories.html)로 조회하면 description등은 보여주지 않고 id만 제공하여 어떤 대화가 mapping되어 있는지 알 수 없습니다. 따라서, Memory ID 생성 시점에 config 형태로 저장해서, 대화와 mapping이 필요합니다. 대화는 sessionId와 actorId를 필수로 가지고 있어야 하므로, config에서 이 정보를 Memory ID와 mapping 할 수 있어야 합니다.
+
+## Reference
+
+[Amazon Bedrock AgentCore Memory](https://github.com/awslabs/amazon-bedrock-agentcore-samples/tree/main/01-tutorials/04-AgentCore-memory)
