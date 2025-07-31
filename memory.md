@@ -188,4 +188,7 @@ Memory의 모든 동작은 Memory ID가 반드시 필요한데, [list_memories](
 
 [boto3 - create_memory](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/create_memory.html)
 
+[boto3 - get_memory_record](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/get_memory_record.html)
+
 [Bedrock AgentCore Memory SDK](https://github.com/aws/bedrock-agentcore-sdk-python/tree/main/src/bedrock_agentcore/memory)
+
