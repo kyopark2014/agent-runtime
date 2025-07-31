@@ -4,7 +4,7 @@
 
 [How AgentCore Memory Works](https://github.com/awslabs/amazon-bedrock-agentcore-samples/tree/main/01-tutorials/04-AgentCore-memory#how-agentcore-memory-works)와 같이 AgentCore에는 short/long term memory를 가지고 있습니다. short term memory는 sliding windows형태로 근래 k개의 메시지를 저장하였다가 prompt로 활용합니다. long term memory는 아래와 같이 vector store 형태로 운용됩니다. 또한 long term memory는 Semantic, Summary, User Preference, Custom과 같은 형태의 strategy를 가지고 있고 namespace를 이용해 구분합니다. 
 
-<img width="700" alt="image" src="https://github.com/user-attachments/assets/4920d36a-884d-4668-8eb4-f9665fe300d0" />
+<img width="600" alt="image" src="https://github.com/user-attachments/assets/4920d36a-884d-4668-8eb4-f9665fe300d0" />
 
 
 Memory와 관련된 용어는 아래와 같습니다.
