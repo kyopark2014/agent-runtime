@@ -51,8 +51,8 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "basic", "tavily-search", "aws-api", "aws-knowledge", "aws document", 
-            "use_aws", "repl coder","agentcore coder", "knowledge base",     
+            "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", 
+            "aws document", "use_aws", "repl coder","agentcore coder", "knowledge base",     
             "perplexity", "wikipedia", "agentcore-browser",
             "filesystem", "terminal", "text editor", "context7", "puppeteer", 
             "playwright", "airbnb",  
@@ -102,7 +102,7 @@ with st.sidebar:
     )   
 
     agent_type = st.radio(
-        label="Agent 타입을 선택하세요. ",options=["LangGraph", "Strands"], index=0
+        label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
     )
     
     uploaded_file = None

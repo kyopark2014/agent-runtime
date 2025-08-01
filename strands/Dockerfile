@@ -53,6 +53,7 @@ WORKDIR /app
 # Core dependencies
 RUN pip install --upgrade "boto3==1.39.12" "botocore==1.39.12"
 RUN pip install langchain_aws langchain langchain_community langchain_experimental
+RUN pip install bedrock-agentcore
 RUN pip install mcp==1.12.1 langchain-mcp-adapters==0.1.9
 RUN pip install strands-agents==1.0.1 strands-agents-tools
 RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv

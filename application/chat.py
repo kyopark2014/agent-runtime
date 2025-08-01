@@ -686,7 +686,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
         "history_mode": history_mode
     })
 
-    if agent_type == 'LangGraph':
+    if agent_type == 'langgraph':
         agent_runtime_arn = langgraph_agent_runtime_arn
     else: 
         agent_runtime_arn = strands_agent_runtime_arn
