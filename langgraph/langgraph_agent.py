@@ -6,6 +6,7 @@ import chat
 import utils
 import mcp_config
 import os
+import agentcore_memory
 
 from langgraph.prebuilt import ToolNode
 from typing import Literal
@@ -254,6 +255,78 @@ def get_tool_info(tool_name, tool_content):
         logger.info(f"content: {content}")
         logger.info(f"tool_references: {tool_references}")
 
+    # aws-knowledge
+    elif tool_name == "aws___read_documentation":
+        logger.info(f"#### {tool_name} ####")
+        if isinstance(tool_content, dict):
+            json_data = tool_content
+        elif isinstance(tool_content, list):
+            json_data = tool_content
+        else:
+            json_data = json.loads(tool_content)
+        
+        logger.info(f"json_data: {json_data}")
+        payload = json_data["response"]["payload"]
+        if "content" in payload:
+            payload_content = payload["content"]
+            if "result" in payload_content:
+                result = payload_content["result"]
+                logger.info(f"result: {result}")
+                if isinstance(result, str) and "AWS Documentation from" in result:
+                    logger.info(f"Processing AWS Documentation format: {result}")
+                    try:
+                        # Extract URL from "AWS Documentation from https://..."
+                        url_start = result.find("https://")
+                        if url_start != -1:
+                            # Find the colon after the URL (not inside the URL)
+                            url_end = result.find(":", url_start)
+                            if url_end != -1:
+                                # Check if the colon is part of the URL or the separator
+                                url_part = result[url_start:url_end]
+                                # If the colon is immediately after the URL, use it as separator
+                                if result[url_end:url_end+2] == ":\n":
+                                    url = url_part
+                                    content_start = url_end + 2  # Skip the colon and newline
+                                else:
+                                    # Try to find the actual URL end by looking for space or newline
+                                    space_pos = result.find(" ", url_start)
+                                    newline_pos = result.find("\n", url_start)
+                                    if space_pos != -1 and newline_pos != -1:
+                                        url_end = min(space_pos, newline_pos)
+                                    elif space_pos != -1:
+                                        url_end = space_pos
+                                    elif newline_pos != -1:
+                                        url_end = newline_pos
+                                    else:
+                                        url_end = len(result)
+                                    
+                                    url = result[url_start:url_end]
+                                    content_start = url_end + 1
+                                
+                                # Remove trailing colon from URL if present
+                                if url.endswith(":"):
+                                    url = url[:-1]
+                                
+                                # Extract content after the URL
+                                if content_start < len(result):
+                                    content_text = result[content_start:].strip()
+                                    # Truncate content for display
+                                    display_content = content_text[:100] + "..." if len(content_text) > 100 else content_text
+                                    display_content = display_content.replace("\n", "")
+                                    
+                                    tool_references.append({
+                                        "url": url,
+                                        "title": "AWS Documentation",
+                                        "content": display_content
+                                    })
+                                    content += content_text + "\n\n"
+                                    logger.info(f"Extracted URL: {url}")
+                                    logger.info(f"Extracted content length: {len(content_text)}")
+                    except Exception as e:
+                        logger.error(f"Error parsing AWS Documentation format: {e}")
+        logger.info(f"content: {content}")
+        logger.info(f"tool_references: {tool_references}")
+
     else:        
         try:
             if isinstance(tool_content, dict):
@@ -325,7 +398,7 @@ async def call_model(state: State, config):
     if isinstance(last_message, ToolMessage):
         tool_name = last_message.name
         tool_content = last_message.content
-        logger.info(f"tool_name: {tool_name}, content: {tool_content[:800]}")
+        logger.info(f"tool_name: {tool_name}, content: {tool_content}")
 
         if debug_mode == "Enable":
             if tool_name == "terminal":
@@ -535,64 +608,6 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
 #         server_lists.append(server_name)
 #     return server_lists
 
-user_id = "LangGraph"
-memory_id = None
-memory_client = MemoryClient(region_name="us-west-2")
-def init_memory():
-    global memory_id
-    agent_type = "langgraph"
-
-    memory_id = utils.memory_id
-    if memory_id is None:    
-        memories = memory_client.list_memories()
-        logger.info(f"memories: {memories}")
-        for memory in memories:            
-            logger.info(f"Memory ID: {memory.get('id')}")
-            memory_name = memory.get('id').split("-")[0]
-            if memory_name == utils.projectName:
-                logger.info(f"The memory of {memory_name} was found")
-                memory_id = memory.get('id')
-                logger.info(f"Memory Arn: {memory.get('arn')}")
-                break
-
-        if memory_id is None:  # no memory_id found, create new memory_id
-            result = memory_client.create_memory(
-                name=utils.projectName,
-                description=f"Memory for {utils.projectName}",
-                event_expiry_days=365, # 7 - 365 days
-                # memory_execution_role_arn=memory_execution_role_arn
-            )
-            logger.info(f"result of memory creation: {result}")
-            memory_id = result.get('id')
-            logger.info(f"memory_id: {memory_id}")
-
-            agentcore_path = os.path.join(os.path.dirname(__file__), "agentcore.json")
-            if not os.path.exists(agentcore_path):
-                with open(agentcore_path, "w", encoding="utf-8") as f:
-                    json.dump({"memory_id": memory_id}, f, ensure_ascii=False, indent=4)
-                logger.info(f"memory_id was created and saved to {agentcore_path}")
-            else:
-                with open(agentcore_path, "r", encoding="utf-8") as f:
-                    json_data = json.load(f)
-                    json_data["memory_id"] = memory_id
-                    with open(agentcore_path, "w", encoding="utf-8") as f:
-                        json.dump(json_data, f, ensure_ascii=False, indent=4)
-                logger.info(f"memory_id was updated to {memory_id}")
-
-def save_conversation_to_memory(query, result):
-    # save conversation to memory
-    logger.info(f"###### save_conversation_to_memory ######")
-    logger.info(f"memory_id: {memory_id}")
-    memory_result = memory_client.create_event(
-        memory_id=memory_id,
-        actor_id=user_id, 
-        session_id=user_id, 
-        messages=[
-            (query, "USER"),
-            (result, "ASSISTANT")
-        ]
-    )
-    logger.info(f"result of save conversation to memory: {memory_result}")
 
 async def run_agent(query, mcp_servers, historyMode, containers):
     global status_msg, response_msg, image_urls, references
@@ -601,8 +616,13 @@ async def run_agent(query, mcp_servers, historyMode, containers):
     image_urls = []
     references = []
 
-    if memory_id is None:
-        init_memory()
+    if agentcore_memory.memory_id is None:
+        user_id = actor_id = chat.user_id
+        session_id = chat.session_id
+
+        add_notification(containers, f"Memory will be created...")
+        agentcore_memory.init_memory(user_id, actor_id, session_id)
+        add_notification(containers, f"Memory was created...")
 
     global index
     index = 0
@@ -687,15 +707,10 @@ async def run_agent(query, mcp_servers, historyMode, containers):
         containers['notification'][index-1].markdown(result)
 
     # save event to memory
-    if memory_id is not None:
-        save_conversation_to_memory(query, result) 
+    if agentcore_memory.memory_id is not None:
+        agentcore_memory.save_conversation_to_memory(query, result) 
 
-    conversations = memory_client.list_events(
-        memory_id=memory_id,
-        actor_id=user_id,
-        session_id=user_id,
-        max_results=5,
-    )
+    conversations = agentcore_memory.get_memory_record()
     logger.info(f"conversations: {conversations}")
 
     return result, image_url

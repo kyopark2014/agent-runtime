@@ -698,7 +698,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
         agentRuntimeArn=agent_runtime_arn,
         runtimeSessionId=runtime_session_id,
         payload=payload,
-        qualifier="DEFAULT"
+        qualifier="DEFAULT" # DEFAULT or LATEST
     )
 
     response_body = response['response'].read()

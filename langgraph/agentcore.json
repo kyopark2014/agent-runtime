@@ -1,5 +1,3 @@
 {
-    "agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_langgraph-diXnng9rUU",
-    "memory_id": "agentcore-5nYCE78Oj9",
-    "namespace": "/users/langgraph"
+    "agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_langgraph-ro7AS7HsFA"
 }

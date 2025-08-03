@@ -1,3 +1,5 @@
+bedrock-agentcore
+bedrock-agentcore-starter-toolkit
 streamlit==1.41.0
 streamlit-chat
 pandas
@@ -35,6 +37,4 @@ pytrials==1.0.0
 strands-agents>=0.1.0
 strands-agents-tools
 reportlab
-bedrock-agentcore
-bedrock-agentcore-starter-toolkit
 nova-act

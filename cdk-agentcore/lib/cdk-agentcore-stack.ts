@@ -477,6 +477,22 @@ export class CdkAgentcoreStack extends cdk.Stack {
       ]
     }));
 
+    // Bedrock AgentCore Memory permissions for agent runtime role
+    const agentRuntimeMemoryPolicy = new iam.PolicyStatement({ 
+      effect: iam.Effect.ALLOW,
+      resources: ["*"],
+      actions: [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock-agentcore:*"
+      ],
+    });        
+    agentRuntimeRole.attachInlinePolicy( 
+      new iam.Policy(this, `agent-runtime-memory-policy-for-${projectName}`, {
+        statements: [agentRuntimeMemoryPolicy],
+      }),
+    );  
+
     // agentcore role
     const agentcore_memory_role = new iam.Role(this, `role-agentcore-memory-for-${projectName}`, {
       roleName: `role-agentcore-memory-for-${projectName}-${region}`,
@@ -487,13 +503,11 @@ export class CdkAgentcoreStack extends cdk.Stack {
 
     const agentcoreMemoryPolicy = new iam.PolicyStatement({ 
       effect: iam.Effect.ALLOW,
-      resources: [
-        `arn:aws:bedrock:*::foundation-model/*`,
-        `arn:aws:bedrock:*:*:inference-profile/*`
-      ],
+      resources: ["*"],
       actions: [
         "bedrock:InvokeModel",
-        "bedrock:InvokeModelWithResponseStream"
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock-agentcore:*"
       ],
     });        
     agentcore_memory_role.attachInlinePolicy( 
