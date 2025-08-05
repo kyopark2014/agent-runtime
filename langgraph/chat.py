@@ -46,7 +46,6 @@ if session_id is None:
         memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
         logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
  
-userId = uuid.uuid4().hex
 map_chain = dict() 
 
 config = utils.load_config()
@@ -109,7 +108,7 @@ def update(modelName, debugMode, userId):
         user_id = userId
         logger.info(f"user_id: {user_id}")
 
-        if "userId" in checkpointers:
+        if user_id in checkpointers:
             checkpointer = checkpointers[user_id]
             memorystore = memorystores[user_id]
         else:
