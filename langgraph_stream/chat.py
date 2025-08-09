@@ -6,7 +6,6 @@ import re
 import uuid
 import info 
 import utils
-import agentcore_memory
 
 from langchain_aws import ChatBedrock
 from botocore.config import Config
@@ -28,24 +27,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat")
 
-# for memory
-memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
-logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
-
-if session_id is None:
-    logger.info(f"session_id is None")
-    user_id = "langgraph"
-    actor_id = user_id
-    session_id = uuid.uuid4().hex
-
-    logger.info(f"session_id is None, update memory variables.")
-    agentcore_memory.update_memory_variables(new_user_id=user_id, new_actor_id=user_id, new_session_id=session_id)
-
-    if memory_id is None:
-        agentcore_memory.init_memory(user_id, actor_id, session_id)
-        memory_id, user_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables()
-        logger.info(f"memory_id: {memory_id}, user_id: {user_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
- 
 map_chain = dict() 
 
 config = utils.load_config()

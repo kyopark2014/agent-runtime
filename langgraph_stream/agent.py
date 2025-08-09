@@ -5,8 +5,6 @@ import traceback
 import chat
 import utils
 import mcp_config
-import os
-import agentcore_memory
 
 from langgraph.prebuilt import ToolNode
 from typing import Literal
@@ -21,7 +19,6 @@ from typing import Literal
 from langgraph.graph import START, END, StateGraph
 from typing_extensions import Annotated, TypedDict
 from langgraph.graph.message import add_messages
-from bedrock_agentcore.memory import MemoryClient
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 logging.basicConfig(

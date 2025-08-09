@@ -12,6 +12,7 @@ import info
 import re
 import csv
 import PyPDF2
+import ast
 
 from io import BytesIO
 from PIL import Image
@@ -23,6 +24,7 @@ from langchain.docstore.document import Document
 from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from bedrock_agentcore.memory import MemoryClient
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -60,7 +62,7 @@ projectName = config['projectName']
 def load_agentcore_config():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph', "agentcore.json")
+    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph_stream', "agentcore.json")
     with open(langgraph_arn_path, "r", encoding="utf-8") as f:
         langgraph_data = json.load(f)
         langgraph_agent_runtime_arn = langgraph_data['agent_runtime_arn']
@@ -740,93 +742,144 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                     if data:
                         try:
                             data_json = json.loads(data)
-                            if isinstance(data_json, dict) and 'event' in data_json and 'contentBlockDelta' in data_json['event']:
-                                delta = data_json['event']['contentBlockDelta'].get('delta', {})
-                                if 'text' in delta:
-                                    current_response += delta['text']
-                                    containers['result'].markdown(current_response)
-                                    logger.info(f"{delta['text']}")
-                            elif isinstance(data_json, dict) and 'delta' in data_json and 'toolUse' in data_json:
-                                logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys()}")
-                                logger.info(f"{data_json}")
-                                tool_name = data_json['toolUse']['toolName']
-                                input = data_json['toolUse']['input']
-                                logger.info(f"Tool: {tool_name}\nInput: {input}")
-                                add_notification(containers, f"Tool: {tool_name}\nInput: {input}")
-                            
-                            # for tool info
-                            elif isinstance(data_json, dict) and 'current_tool_use' in data_json:
-                                tool_info = data_json['current_tool_use']
-                                tool_name = tool_info.get('name', '')
-                                input_data = tool_info.get('input', '')
-                                logger.info(f"Tool: {tool_name}\nInput: {input_data}")
-                                add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
-                            elif isinstance(data_json, str) and 'delta' in data_json:
-                                try:
-                                    parsed_data = json.loads(data_json)
-                                    if isinstance(parsed_data, dict) and 'current_tool_use' in parsed_data:
-                                        tool_info = parsed_data['current_tool_use']
-                                        tool_name = tool_info.get('name', '')
-                                        input_data = tool_info.get('input', '')
-                                        logger.info(f"Tool (from string): {tool_name}\nInput: {input_data}")
-                                        add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
-                                except json.JSONDecodeError:
-                                    logger.debug(f"Skipping non-JSON string: {data_json[:50]}...")
-                                except Exception as e:
-                                    logger.warning(f"Failed to parse data_json string: {e}")
-                            
-                            elif 'data' in data_json:
-                                if isinstance(data_json, dict):
-                                    continue
-                                elif isinstance(data_json, str) and data_json.startswith("{'data':"):
-                                    continue
-                                else:
-                                    logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
+
+                            if agent_type == 'strands':     
+                                if isinstance(data_json, dict) and 'event' in data_json and 'contentBlockDelta' in data_json['event']:
+                                    delta = data_json['event']['contentBlockDelta'].get('delta', {})
+                                    if 'text' in delta:
+                                        current_response += delta['text']
+                                        containers['result'].markdown(current_response)
+                                        logger.info(f"{delta['text']}")
+                                elif isinstance(data_json, dict) and 'delta' in data_json and 'toolUse' in data_json:
+                                    logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys()}")
                                     logger.info(f"{data_json}")
-                            elif isinstance(data_json, dict) and 'message' in data_json:
-                                try:
-                                    message = data_json['message']
-                                    content = message.get('content', [])
-                                    
-                                    if content and isinstance(content, list):
-                                        content_item = content[0]                                            
-                                        # toolUse
-                                        if 'toolUse' in content_item:
-                                            tool_use = content_item['toolUse']
-                                            tool_name = tool_use.get('name', '')
-                                            input_data = tool_use.get('input', {})
-                                            logger.info(f"Tool Use: {tool_name}, Input: {input_data}")
-                                            add_notification(containers, f"Tool Use: {tool_name}\nInput: {input_data}")
+                                    tool_name = data_json['toolUse']['toolName']
+                                    input = data_json['toolUse']['input']
+                                    logger.info(f"Tool: {tool_name}\nInput: {input}")
+                                    add_notification(containers, f"Tool: {tool_name}\nInput: {input}")
+                                
+                                # for tool info
+                                elif isinstance(data_json, dict) and 'current_tool_use' in data_json:
+                                    tool_info = data_json['current_tool_use']
+                                    tool_name = tool_info.get('name', '')
+                                    input_data = tool_info.get('input', '')
+                                    logger.info(f"Tool: {tool_name}\nInput: {input_data}")
+                                    add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
+                                elif isinstance(data_json, str) and 'delta' in data_json:
+                                    try:
+                                        parsed_data = json.loads(data_json)
+                                        if isinstance(parsed_data, dict) and 'current_tool_use' in parsed_data:
+                                            tool_info = parsed_data['current_tool_use']
+                                            tool_name = tool_info.get('name', '')
+                                            input_data = tool_info.get('input', '')
+                                            logger.info(f"Tool (from string): {tool_name}\nInput: {input_data}")
+                                            add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
+                                    except json.JSONDecodeError:
+                                        logger.debug(f"Skipping non-JSON string: {data_json[:50]}...")
+                                    except Exception as e:
+                                        logger.warning(f"Failed to parse data_json string: {e}")
+                                
+                                elif 'data' in data_json:
+                                    if isinstance(data_json, dict):
+                                        continue
+                                    elif isinstance(data_json, str) and data_json.startswith("{'data':"):
+                                        continue
+                                    else:
+                                        logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
+                                        logger.info(f"{data_json}")
+                                elif isinstance(data_json, dict) and 'message' in data_json:
+                                    try:
+                                        message = data_json['message']
+                                        content = message.get('content', [])
                                         
-                                        # toolResult 
-                                        elif 'toolResult' in content_item:
-                                            tool_result = content_item['toolResult']
-                                            status = tool_result.get('status', '')
-                                            result_content = tool_result.get('content', [])
+                                        if content and isinstance(content, list):
+                                            content_item = content[0]                                            
+                                            # toolUse
+                                            if 'toolUse' in content_item:
+                                                tool_use = content_item['toolUse']
+                                                tool_name = tool_use.get('name', '')
+                                                input_data = tool_use.get('input', {})
+                                                logger.info(f"Tool Use: {tool_name}, Input: {input_data}")
+                                                add_notification(containers, f"Tool Use: {tool_name}\nInput: {input_data}")
                                             
-                                            if result_content and isinstance(result_content, list):
-                                                result_text = result_content[0].get('text', '')
-                                                logger.info(f"Tool Result: {result_text}")
-                                                add_notification(containers, f"Tool Result: {result_text}")
-                                            else:
-                                                logger.info(f"Tool Result: {status}")
-                                                add_notification(containers, f"Tool Result: {status}")                                                    
-                                        
-                                        # text 
-                                        elif 'text' in content_item:
-                                            if result == "":
-                                                result = content_item['text']
-                                            else:
-                                                result += '\n' + content_item['text']
-                                            logger.info(f"Message text: {result}")
+                                            # toolResult 
+                                            elif 'toolResult' in content_item:
+                                                tool_result = content_item['toolResult']
+                                                status = tool_result.get('status', '')
+                                                result_content = tool_result.get('content', [])
+                                                
+                                                if result_content and isinstance(result_content, list):
+                                                    result_text = result_content[0].get('text', '')
+                                                    logger.info(f"Tool Result: {result_text}")
+                                                    add_notification(containers, f"Tool Result: {result_text}")
+                                                else:
+                                                    logger.info(f"Tool Result: {status}")
+                                                    add_notification(containers, f"Tool Result: {status}")                                                    
                                             
-                                except (KeyError, IndexError, TypeError) as e:
-                                    logger.warning(f"Error processing message content: {e}, data_json: {data_json}")
+                                            # text 
+                                            elif 'text' in content_item:
+                                                if result == "":
+                                                    result = content_item['text']
+                                                else:
+                                                    result += '\n' + content_item['text']
+                                                logger.info(f"Message text: {result}")
+                                                
+                                    except (KeyError, IndexError, TypeError) as e:
+                                        logger.warning(f"Error processing message content: {e}, data_json: {data_json}")
+                                        continue
+                            else: # langgraph   
+                                logger.info(f"DEBUG: data_json type: {type(data_json)}")
+                                logger.info(f"DEBUG: data_json content: {str(data_json)[:200]}...")
+                                
+                                parsed_data_json = data_json
+                                
+                                if isinstance(data_json, str):
+                                    logger.info(f"data_json is string, attempting to parse...")
+                                    try:
+                                        parsed_data_json = json.loads(data_json)
+                                        logger.info(f"Successfully parsed string data_json to dict using json.loads")
+                                    except json.JSONDecodeError:
+                                        try:
+                                            parsed_data_json = ast.literal_eval(data_json)
+                                            logger.info(f"Successfully parsed string data_json to dict using ast.literal_eval")
+                                        except (ValueError, SyntaxError) as e:
+                                            logger.info(f"ast.literal_eval failed: {e}")
+                                            try:
+                                                parsed_data_json = eval(data_json)
+                                                logger.info(f"Successfully parsed string data_json to dict using eval")
+                                            except Exception as eval_error:
+                                                logger.info(f"All parsing methods failed: {eval_error}")
+                                                logger.info(f"data_json content: {data_json[:500]}...")
+                                                continue
+                                elif isinstance(data_json, dict):
+                                    logger.info(f"data_json is already a dict")
+                                    parsed_data_json = data_json
+                                else:
+                                    logger.info(f"data_json is neither string nor dict: {type(data_json)}")
                                     continue
-                            else:
-                                logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
-                                logger.info(f"{data_json}")
-                                    
+                                
+                                if isinstance(parsed_data_json, dict) and 'messages' in parsed_data_json:
+                                    messages = parsed_data_json['messages']
+                                    logger.info(f"messages: {messages}")
+
+                                    for message in messages:
+                                        if isinstance(message, AIMessage):
+                                            result += message.content
+                                            logger.info(f"AI Message: {message.content}")
+                                            containers['result'].markdown(message.content)
+                                        elif isinstance(message, HumanMessage):
+                                            result += message.content
+                                            logger.info(f"Human Message: {message.content}")
+                                            containers['result'].markdown(message.content)
+                                        elif isinstance(message, ToolMessage):
+                                            result += message.content
+                                            logger.info(f"Tool Message: {message.content}")
+                                            add_notification(containers, f"Tool Message: {message.content}")
+                                        else:
+                                            logger.info(f"Unknown message type: {type(message)}")
+                                else:
+                                    logger.info(f"No messages found in the response: {parsed_data_json}")
+                                                                    
                         except json.JSONDecodeError:
                             logger.info(f"Not JSON: {data}")
         
@@ -906,89 +959,146 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                         if data:
                             try:
                                 data_json = json.loads(data)
-                                if isinstance(data_json, dict) and 'event' in data_json and 'contentBlockDelta' in data_json['event']:
-                                    delta = data_json['event']['contentBlockDelta'].get('delta', {})
-                                    if 'text' in delta:
-                                        current_response += delta['text']
-                                        containers['result'].markdown(current_response)
-                                        logger.info(f"{delta['text']}")
-                                elif isinstance(data_json, dict) and 'delta' in data_json and 'toolUse' in data_json:
-                                    logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys()}")
-                                    logger.info(f"{data_json}")
-                                    tool_name = data_json['toolUse']['toolName']
-                                    input = data_json['toolUse']['input']
-                                    logger.info(f"Tool: {tool_name}\nInput: {input}")
-                                    add_notification(containers, f"Tool: {tool_name}\nInput: {input}")
-                                
-                                # for tool info
-                                elif isinstance(data_json, dict) and 'current_tool_use' in data_json:
-                                    tool_info = data_json['current_tool_use']
-                                    tool_name = tool_info.get('name', '')
-                                    input_data = tool_info.get('input', '')
-                                    logger.info(f"Tool: {tool_name}\nInput: {input_data}")
-                                    add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
-                                elif isinstance(data_json, str) and 'delta' in data_json:
-                                    try:
-                                        parsed_data = json.loads(data_json)
-                                        if isinstance(parsed_data, dict) and 'current_tool_use' in parsed_data:
-                                            tool_info = parsed_data['current_tool_use']
-                                            tool_name = tool_info.get('name', '')
-                                            input_data = tool_info.get('input', '')
-                                            logger.info(f"Tool (from string): {tool_name}\nInput: {input_data}")
-                                            add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
-                                    except json.JSONDecodeError:
-                                        logger.debug(f"Skipping non-JSON string: {data_json[:50]}...")
-                                    except Exception as e:
-                                        logger.warning(f"Failed to parse data_json string: {e}")
-                                
-                                elif 'data' in data_json:
-                                    if isinstance(data_json, dict):
-                                        continue
-                                    elif isinstance(data_json, str) and data_json.startswith("{'data':"):
-                                        continue
+                                logger.info(f"data_json: {data_json}")
+
+                                logger.info(f"agent_type: {agent_type}")
+
+                                if agent_type == 'strands':                                    
+                                    if isinstance(data_json, dict) and 'event' in data_json and 'contentBlockDelta' in data_json['event']:
+                                        delta = data_json['event']['contentBlockDelta'].get('delta', {})
+                                        if 'text' in delta:
+                                            current_response += delta['text']
+                                            containers['result'].markdown(current_response)
+                                            logger.info(f"{delta['text']}")
+                                    elif isinstance(data_json, dict) and 'delta' in data_json and 'toolUse' in data_json:
+                                        logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys()}")
+                                        logger.info(f"{data_json}")
+                                        tool_name = data_json['toolUse']['toolName']
+                                        input = data_json['toolUse']['input']
+                                        logger.info(f"Tool: {tool_name}\nInput: {input}")
+                                        add_notification(containers, f"Tool: {tool_name}\nInput: {input}")
+                                    
+                                    # for tool info
+                                    elif isinstance(data_json, dict) and 'current_tool_use' in data_json:
+                                        tool_info = data_json['current_tool_use']
+                                        tool_name = tool_info.get('name', '')
+                                        input_data = tool_info.get('input', '')
+                                        logger.info(f"Tool: {tool_name}\nInput: {input_data}")
+                                        add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
+                                    elif isinstance(data_json, str) and 'delta' in data_json:
+                                        try:
+                                            parsed_data = json.loads(data_json)
+                                            if isinstance(parsed_data, dict) and 'current_tool_use' in parsed_data:
+                                                tool_info = parsed_data['current_tool_use']
+                                                tool_name = tool_info.get('name', '')
+                                                input_data = tool_info.get('input', '')
+                                                logger.info(f"Tool (from string): {tool_name}\nInput: {input_data}")
+                                                add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
+                                        except json.JSONDecodeError:
+                                            logger.debug(f"Skipping non-JSON string: {data_json[:50]}...")
+                                        except Exception as e:
+                                            logger.warning(f"Failed to parse data_json string: {e}")
+                                    
+                                    elif 'data' in data_json:
+                                        if isinstance(data_json, dict):
+                                            continue
+                                        elif isinstance(data_json, str) and data_json.startswith("{'data':"):
+                                            continue
+                                        else:
+                                            logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
+                                            logger.info(f"{data_json}")
+                                    elif isinstance(data_json, dict) and 'message' in data_json:
+                                        try:
+                                            message = data_json['message']
+                                            content = message.get('content', [])
+                                            
+                                            if content and isinstance(content, list):
+                                                content_item = content[0]                                            
+                                                # toolUse
+                                                if 'toolUse' in content_item:
+                                                    tool_use = content_item['toolUse']
+                                                    tool_name = tool_use.get('name', '')
+                                                    input_data = tool_use.get('input', {})
+                                                    logger.info(f"Tool Use: {tool_name}, Input: {input_data}")
+                                                    add_notification(containers, f"Tool Use: {tool_name}\nInput: {input_data}")
+                                                
+                                                # toolResult 
+                                                elif 'toolResult' in content_item:
+                                                    tool_result = content_item['toolResult']
+                                                    status = tool_result.get('status', '')
+                                                    result_content = tool_result.get('content', [])
+                                                    
+                                                    if result_content and isinstance(result_content, list):
+                                                        result_text = result_content[0].get('text', '')
+                                                        logger.info(f"Tool Result: {result_text}")
+                                                        add_notification(containers, f"Tool Result: {result_text}")
+                                                    else:
+                                                        logger.info(f"Tool Result: {status}")
+                                                        add_notification(containers, f"Tool Result: {status}")                                                    
+                                                
+                                                # text 
+                                                elif 'text' in content_item:
+                                                    result = content_item['text']
+                                                    logger.info(f"Message text: {result}")
+                                                    
+                                        except (KeyError, IndexError, TypeError) as e:
+                                            logger.warning(f"Error processing message content: {e}, data_json: {data_json}")
+                                            continue
                                     else:
                                         logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
                                         logger.info(f"{data_json}")
-                                elif isinstance(data_json, dict) and 'message' in data_json:
-                                    try:
-                                        message = data_json['message']
-                                        content = message.get('content', [])
-                                        
-                                        if content and isinstance(content, list):
-                                            content_item = content[0]                                            
-                                            # toolUse
-                                            if 'toolUse' in content_item:
-                                                tool_use = content_item['toolUse']
-                                                tool_name = tool_use.get('name', '')
-                                                input_data = tool_use.get('input', {})
-                                                logger.info(f"Tool Use: {tool_name}, Input: {input_data}")
-                                                add_notification(containers, f"Tool Use: {tool_name}\nInput: {input_data}")
-                                            
-                                            # toolResult 
-                                            elif 'toolResult' in content_item:
-                                                tool_result = content_item['toolResult']
-                                                status = tool_result.get('status', '')
-                                                result_content = tool_result.get('content', [])
-                                                
-                                                if result_content and isinstance(result_content, list):
-                                                    result_text = result_content[0].get('text', '')
-                                                    logger.info(f"Tool Result: {result_text}")
-                                                    add_notification(containers, f"Tool Result: {result_text}")
-                                                else:
-                                                    logger.info(f"Tool Result: {status}")
-                                                    add_notification(containers, f"Tool Result: {status}")                                                    
-                                            
-                                            # text 
-                                            elif 'text' in content_item:
-                                                result = content_item['text']
-                                                logger.info(f"Message text: {result}")
-                                                
-                                    except (KeyError, IndexError, TypeError) as e:
-                                        logger.warning(f"Error processing message content: {e}, data_json: {data_json}")
+                                else: # langgraph   
+                                    logger.info(f"DEBUG: data_json type: {type(data_json)}")
+                                    logger.info(f"DEBUG: data_json content: {str(data_json)[:200]}...")
+                                    
+                                    parsed_data_json = data_json
+                                    
+                                    if isinstance(data_json, str):
+                                        logger.info(f"data_json is string, attempting to parse...")
+                                        try:
+                                            parsed_data_json = json.loads(data_json)
+                                            logger.info(f"Successfully parsed string data_json to dict using json.loads")
+                                        except json.JSONDecodeError:
+                                            try:
+                                                parsed_data_json = ast.literal_eval(data_json)
+                                                logger.info(f"Successfully parsed string data_json to dict using ast.literal_eval")
+                                            except (ValueError, SyntaxError) as e:
+                                                logger.info(f"ast.literal_eval failed: {e}")
+                                                try:
+                                                    parsed_data_json = eval(data_json)
+                                                    logger.info(f"Successfully parsed string data_json to dict using eval")
+                                                except Exception as eval_error:
+                                                    logger.info(f"All parsing methods failed: {eval_error}")
+                                                    logger.info(f"data_json content: {data_json[:500]}...")
+                                                    continue
+                                    elif isinstance(data_json, dict):
+                                        logger.info(f"data_json is already a dict")
+                                        parsed_data_json = data_json
+                                    else:
+                                        logger.info(f"data_json is neither string nor dict: {type(data_json)}")
                                         continue
-                                else:
-                                    logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
-                                    logger.info(f"{data_json}")
+                                    
+                                    if isinstance(parsed_data_json, dict) and 'messages' in parsed_data_json:
+                                        messages = parsed_data_json['messages']
+                                        logger.info(f"messages: {messages}")
+
+                                        for message in messages:
+                                            if isinstance(message, AIMessage):
+                                                result += message.content
+                                                logger.info(f"AI Message: {message.content}")
+                                                containers['result'].markdown(message.content)
+                                            elif isinstance(message, HumanMessage):
+                                                result += message.content
+                                                logger.info(f"Human Message: {message.content}")
+                                                containers['result'].markdown(message.content)
+                                            elif isinstance(message, ToolMessage):
+                                                result += message.content
+                                                logger.info(f"Tool Message: {message.content}")
+                                                add_notification(containers, f"Tool Message: {message.content}")
+                                            else:
+                                                logger.info(f"Unknown message type: {type(message)}")
+                                    else:
+                                        logger.info(f"No messages found in the response: {parsed_data_json}")
                                         
                             except json.JSONDecodeError:
                                 logger.info(f"Not JSON: {data}")
