@@ -183,6 +183,49 @@ logger.info(f"conversations: {conversations}")
 ]
 ```
 
+## AWS CLI로 동작 확인하기
+
+```text
+aws bedrock-agentcore retrieve-memory-records \
+    --memory-id "mcp-w4Wd0tBc5g" \
+    --namespace "/users/langgraph" \
+    --search-criteria '{"topK":100, "searchQuery":"사용자"}'
+```
+
+이때의 결과는 아래와 같습니다.
+
+```java
+{
+    "memoryRecordSummaries": [
+        {
+            "memoryRecordId": "mem-272cfb74-0b7e-4ddf-8260-59cdddf28902",
+            "content": {
+                "text": "{\"context\":\"사용자가 자신의 직장이 AWS라고 명시적으로 언급했습니다.\",\"preference\":\"AWS에서 근무하는 것을 선호\",\"categories\":[\"경력\",\"직장\",\"기술\",\"IT\"]}"
+            },
+            "memoryStrategyId": "langgraph-IUSVyT8IwG",
+            "namespaces": [
+                "/users/langgraph"
+            ],
+            "createdAt": "2025-08-09T11:04:25+09:00",
+            "score": 0.36116046
+        },
+        {
+            "memoryRecordId": "mem-df23a942-8cea-45ef-a6a8-f8ee9ef53358",
+            "content": {
+                "text": "{\"context\":\"사용자가 역삼동에서 근무한다고 언급했습니다.\",\"preference\":\"역삼동 지역에서 근무하는 것을 선호\",\"categories\":[\"위치\",\"근무지\"]}"
+            },
+            "memoryStrategyId": "langgraph-IUSVyT8IwG",
+            "namespaces": [
+                "/users/langgraph"
+            ],
+            "createdAt": "2025-08-09T10:30:35+09:00",
+            "score": 0.35573184
+        }
+    ]
+}
+```
+
+
 ## 메모리 ID의 처리
 
 Memory의 모든 동작은 Memory ID가 반드시 필요한데, [list_memories](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/list_memories.html)로 조회하면 description등은 보여주지 않고 id만 제공하여 어떤 대화가 mapping되어 있는지 알 수 없습니다. 따라서, Memory ID 생성 시점에 config 형태로 저장해서, 대화와 mapping이 필요합니다. 대화는 sessionId와 actorId를 필수로 가지고 있어야 하므로, config에서 이 정보를 Memory ID와 mapping 할 수 있어야 합니다.
