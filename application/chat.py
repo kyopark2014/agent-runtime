@@ -66,7 +66,7 @@ def load_agentcore_config():
         langgraph_agent_runtime_arn = langgraph_data['agent_runtime_arn']
         logger.info(f"langgraph_agent_runtime_arn: {langgraph_agent_runtime_arn}")
     
-    strands_arn_path = os.path.join(script_dir, "..", 'strands', "agentcore.json")
+    strands_arn_path = os.path.join(script_dir, "..", 'strands_stream', "agentcore.json")
     with open(strands_arn_path, "r", encoding="utf-8") as f:
         strands_data = json.load(f)
         strands_agent_runtime_arn = strands_data['agent_runtime_arn']
@@ -681,7 +681,7 @@ def get_summary_of_uploaded_file(file_name, st):
 
     return msg
 
-def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
+def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, containers):
     user_id = agent_type # for testing
     logger.info(f"user_id: {user_id}")
 
@@ -699,22 +699,159 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name):
         agent_runtime_arn = strands_agent_runtime_arn
 
     logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
+    logger.info(f"Payload: {payload}")
     
-    agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
-    response = agent_core_client.invoke_agent_runtime(
-        agentRuntimeArn=agent_runtime_arn,
-        runtimeSessionId=runtime_session_id,
-        payload=payload,
-        qualifier="DEFAULT" # DEFAULT or LATEST
-    )
+    try:
+        agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
+        response = agent_core_client.invoke_agent_runtime(
+            agentRuntimeArn=agent_runtime_arn,
+            runtimeSessionId=runtime_session_id,
+            payload=payload,
+            qualifier="DEFAULT" # DEFAULT or LATEST
+        )
 
-    response_body = response['response'].read()
-    response_data = json.loads(response_body)
-    logger.info(f"Agent Response: {response_data}")
-
-    result = response_data.get("result", "")
-
-    return result
+        logger.info(f"Response received from agent runtime")
+        
+        response_body = response['response'].read()
+        
+        if not response_body:
+            error_msg = "Agent runtime returned empty response"
+            logger.error(error_msg)
+            return f"Error: {error_msg}"
+        
+        # response_body가 bytes인 경우 decode
+        if isinstance(response_body, bytes):
+            response_body = response_body.decode('utf-8')
+            
+        logger.info(f"Response body length: {len(response_body)}")
+        logger.info(f"Response body type: {type(response_body)}")
+        
+        # Check if response is streaming format (contains 'data:' lines)
+        content_type = "text/event-stream" if response_body.startswith('data:') else "application/json"
+        logger.info(f"Detected Content-Type: {content_type}")
+        
+        result = current_response = ""
+        if content_type.startswith('text/event-stream'):
+            # Split stream data line by line
+            lines = response_body.split('\n')
+            for line in lines:
+                if line.startswith('data:'):
+                    data = line[5:].strip()  # Remove "data:" prefix and whitespace
+                    if data:
+                        try:
+                            data_json = json.loads(data)
+                            if isinstance(data_json, dict) and 'event' in data_json and 'contentBlockDelta' in data_json['event']:
+                                delta = data_json['event']['contentBlockDelta'].get('delta', {})
+                                if 'text' in delta:
+                                    current_response += delta['text']
+                                    containers['result'].markdown(current_response)
+                                    logger.info(f"{delta['text']}")
+                            elif isinstance(data_json, dict) and 'delta' in data_json and 'toolUse' in data_json:
+                                logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys()}")
+                                logger.info(f"{data_json}")
+                                tool_name = data_json['toolUse']['toolName']
+                                input = data_json['toolUse']['input']
+                                logger.info(f"Tool: {tool_name}\nInput: {input}")
+                                add_notification(containers, f"Tool: {tool_name}\nInput: {input}")
+                            
+                            # for tool info
+                            elif isinstance(data_json, dict) and 'current_tool_use' in data_json:
+                                tool_info = data_json['current_tool_use']
+                                tool_name = tool_info.get('name', '')
+                                input_data = tool_info.get('input', '')
+                                logger.info(f"Tool: {tool_name}\nInput: {input_data}")
+                                add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
+                            elif isinstance(data_json, str) and 'delta' in data_json:
+                                try:
+                                    parsed_data = json.loads(data_json)
+                                    if isinstance(parsed_data, dict) and 'current_tool_use' in parsed_data:
+                                        tool_info = parsed_data['current_tool_use']
+                                        tool_name = tool_info.get('name', '')
+                                        input_data = tool_info.get('input', '')
+                                        logger.info(f"Tool (from string): {tool_name}\nInput: {input_data}")
+                                        add_notification(containers, f"Tool: {tool_name}\nInput: {input_data}")
+                                except json.JSONDecodeError:
+                                    logger.debug(f"Skipping non-JSON string: {data_json[:50]}...")
+                                except Exception as e:
+                                    logger.warning(f"Failed to parse data_json string: {e}")
+                            
+                            elif 'data' in data_json:
+                                if isinstance(data_json, dict):
+                                    continue
+                                elif isinstance(data_json, str) and data_json.startswith("{'data':"):
+                                    continue
+                                else:
+                                    logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
+                                    logger.info(f"{data_json}")
+                            elif isinstance(data_json, dict) and 'message' in data_json:
+                                try:
+                                    message = data_json['message']
+                                    content = message.get('content', [])
+                                    
+                                    if content and isinstance(content, list):
+                                        content_item = content[0]                                            
+                                        # toolUse
+                                        if 'toolUse' in content_item:
+                                            tool_use = content_item['toolUse']
+                                            tool_name = tool_use.get('name', '')
+                                            input_data = tool_use.get('input', {})
+                                            logger.info(f"Tool Use: {tool_name}, Input: {input_data}")
+                                            add_notification(containers, f"Tool Use: {tool_name}\nInput: {input_data}")
+                                        
+                                        # toolResult 
+                                        elif 'toolResult' in content_item:
+                                            tool_result = content_item['toolResult']
+                                            status = tool_result.get('status', '')
+                                            result_content = tool_result.get('content', [])
+                                            
+                                            if result_content and isinstance(result_content, list):
+                                                result_text = result_content[0].get('text', '')
+                                                logger.info(f"Tool Result: {result_text}")
+                                                add_notification(containers, f"Tool Result: {result_text}")
+                                            else:
+                                                logger.info(f"Tool Result: {status}")
+                                                add_notification(containers, f"Tool Result: {status}")                                                    
+                                        
+                                        # text 
+                                        elif 'text' in content_item:
+                                            if result == "":
+                                                result = content_item['text']
+                                            else:
+                                                result += '\n' + content_item['text']
+                                            logger.info(f"Message text: {result}")
+                                            
+                                except (KeyError, IndexError, TypeError) as e:
+                                    logger.warning(f"Error processing message content: {e}, data_json: {data_json}")
+                                    continue
+                            else:
+                                logger.info(f"DEBUG: data_json type: {type(data_json)}, keys: {data_json.keys() if isinstance(data_json, dict) else 'Not a dict'}")
+                                logger.info(f"{data_json}")
+                                    
+                        except json.JSONDecodeError:
+                            logger.info(f"Not JSON: {data}")
+        
+        return result
+        
+    except requests.exceptions.ConnectionError as e:
+        error_msg = f"Docker container connection failed: {str(e)}"
+        logger.error(error_msg)
+        return f"Error: {error_msg}"
+        
+    except requests.exceptions.Timeout as e:
+        error_msg = f"Request timeout: {str(e)}"
+        logger.error(error_msg)
+        return f"Error: {error_msg}"
+        
+    except json.JSONDecodeError as e:
+        error_msg = f"Invalid JSON response from Docker container: {str(e)}"
+        logger.error(error_msg)
+        logger.error(f"Raw response: {response_body}")
+        return f"Error: {error_msg}"
+        
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        logger.error(error_msg)
+        return f"Error: {error_msg}"
 
 def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_name, containers):
     global index
@@ -855,18 +992,6 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         
                             except json.JSONDecodeError:
                                 logger.info(f"Not JSON: {data}")
-            else:
-                # Handle regular JSON response
-                try:
-                    response_data = response.json()
-                    logger.info(f"Agent Response: {response_data}")
-                    result = response_data.get("result", "")
-                except json.JSONDecodeError:
-                    result = response.text
-                    logger.info(f"Response text: {response.text}")
-        else:
-            # Return text as-is if Content-Type is not present
-            result = response.text
         
         return result
         

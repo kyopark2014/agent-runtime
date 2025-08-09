@@ -208,13 +208,13 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             with st.status("thinking...", expanded=True, state="running") as status:
                 logger.info(f"mcp_servers: {mcp_servers}")
 
+                containers = {                        
+                    "notification": [st.empty() for _ in range(500)],
+                    "result": st.empty()
+                } 
                 if platform == 'AgentCore':
-                    response = chat.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName)
-                else:
-                    containers = {                        
-                        "notification": [st.empty() for _ in range(500)],
-                        "result": st.empty()
-                    } 
+                    response = chat.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
+                else:                    
                     response = chat.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
 
             image_url = []
