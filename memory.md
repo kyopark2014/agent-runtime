@@ -202,3 +202,5 @@ Memory의 모든 동작은 Memory ID가 반드시 필요한데, [list_memories](
 [Bedrock AgentCore Memory SDK](https://github.com/aws/bedrock-agentcore-sdk-python/tree/main/src/bedrock_agentcore/memory)
 
 [LangGraph with AgentCore Memory Tool (Short term memory)](https://github.com/awslabs/amazon-bedrock-agentcore-samples/blob/main/01-tutorials/04-AgentCore-memory/01-short-term-memory/01-single-agent/with-langgraph-agent/personal-fitness-coach.ipynb)
+
+[AWS CLI: retrieve-memory-records](https://docs.aws.amazon.com/cli/latest/reference/bedrock-agentcore/retrieve-memory-records.html)
