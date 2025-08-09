@@ -211,9 +211,11 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 if platform == 'AgentCore':
                     response = chat.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName)
                 else:
-                    response = chat.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName)
-
-                st.markdown(response)
+                    containers = {                        
+                        "notification": [st.empty() for _ in range(500)],
+                        "result": st.empty()
+                    } 
+                    response = chat.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
 
             image_url = []
             st.session_state.messages.append({

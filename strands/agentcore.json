@@ -1,3 +1,8 @@
 {
-    "agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_strands-wv0SWFCFN0"
+    "agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_strands-wv0SWFCFN0",
+    "user_id": "strands",
+    "actor_id": "strands",
+    "session_id": "e7fa5a6c3f184e6ba348d316882906d2",
+    "memory_id": "agentcore-ZdNHa13ha4",
+    "namespace": "/users/strands"
 }
