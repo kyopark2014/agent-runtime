@@ -198,6 +198,65 @@ Knowledge Base에서 문서를 활용하기 위해서는 S3에 문서 등록 및
 <img width="1533" height="287" alt="noname" src="https://github.com/user-attachments/assets/2edd3b6b-dbce-4784-b640-139fa84cc223" />
 
 
+### Stream의 처리
+
+#### LangGraph
+
+[LangGraph - agent.py](./application/langgraph_stream/agent.py)와 같이 stream 방식으로 처리하면 agent가 좀 더 동적으로 동작하게 할 수 있습니다. 아래와 같이 MCP 서버의 정보로 json 파일을 만든 후에 MultiServerMCPClient으로 client를 설정하고 나서 agent를 생성합니다. 이후 stream을 이용해 출력할때 json 형태의 결과값을 stream으로 전달합니다. 
+
+```python
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+app = BedrockAgentCoreApp()
+
+@app.entrypoint
+async def agent_langgraph(payload):
+    mcp_json = mcp_config.load_selected_config(mcp_servers)
+    server_params = load_multiple_mcp_server_parameters(mcp_json)
+    client = MultiServerMCPClient(server_params)
+
+    app = buildChatAgentWithHistory(tools)
+    config = {
+        "recursion_limit": 50,
+        "configurable": {"thread_id": user_id},
+        "tools": tools
+    }    
+    inputs = {
+        "messages": [HumanMessage(content=query)]
+    }
+            
+    value = None
+    async for output in app.astream(inputs, config):
+        for key, value in output.items():
+            logger.info(f"--> key: {key}, value: {value}")
+            yield (value)
+```
+
+### Strands 
+
+[Strands - agent.py](./application/strands_stream/agent.py)와 같이 stream으로 처리합니다. 아래와 같이 AgentCore를 endpoint로 지정할 때에 agent_stream의 값을 yeild로 전달하면 streamlit 같은 client에서 동적으로 응답을 받을 수 있습니다.
+
+```python
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+app = BedrockAgentCoreApp()
+
+@app.entrypoint
+async def agentcore_strands(payload):
+    # initiate agent
+    await initiate_agent(
+        system_prompt=None, 
+        strands_tools=strands_tools, 
+        mcp_servers=mcp_servers, 
+        historyMode='Disable'
+    )
+
+    # run agent
+    with mcp_manager.get_active_clients(mcp_servers) as _:
+        agent_stream = agent.stream_async(query)
+
+        async for event in agent_stream:
+            yield (event)
+```
+
 ### Streamlit에서 실행하기
 
 여기서는 Streamlit을 이용하여 AgentCore의 동작을 테스트 할 수 있습니다. 아래와 streamlit을 실행할 수 있습니다.
