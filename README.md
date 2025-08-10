@@ -259,6 +259,34 @@ async def agentcore_strands(payload):
             yield (event)
 ```
 
+### Client의 Stream
+
+AgentCore로 agent_runtime_arn을 이용해 request에 대한 응답을 얻습니다. 이때 content-type이 "text/event-stream"인 경우에 줄단위로 잘라서 prefix인 "data:"를 제거한 후에 json parser를 이용해 얻어진 값을 목적에 맞게 활용합니다.
+
+```python
+agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
+response = agent_core_client.invoke_agent_runtime(
+    agentRuntimeArn=agent_runtime_arn,
+    runtimeSessionId=runtime_session_id,
+    payload=payload,
+    qualifier="DEFAULT" # DEFAULT or LATEST
+)
+
+response_body = response['response'].read()
+if isinstance(response_body, bytes):
+    response_body = response_body.decode('utf-8')
+content_type = "text/event-stream" if response_body.startswith('data:') else "application/json"
+
+if content_type.startswith('text/event-stream'):
+    lines = response_body.split('\n')
+    for line in lines:
+        if line.startswith('data:'):
+            data = line[5:].strip()  # Remove "data:" prefix and whitespace
+            data_json = json.loads(data)
+```
+
+
+
 ### Streamlit에서 실행하기
 
 여기서는 Streamlit을 이용하여 AgentCore의 동작을 테스트 할 수 있습니다. 아래와 streamlit을 실행할 수 있습니다.
