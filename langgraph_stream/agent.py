@@ -620,11 +620,29 @@ async def agent_langgraph(payload):
         "messages": [HumanMessage(content=query)]
     }
             
-    value = None
+    value = result = None
+    final_output = None
     async for output in app.astream(inputs, config):
         for key, value in output.items():
             logger.info(f"--> key: {key}, value: {value}")
+
+            if key == "messages" or key == "agent":
+                if isinstance(value, dict) and "messages" in value:
+                    final_output = value
+                elif isinstance(value, list):
+                    final_output = {"messages": value, "image_url": []}
+                else:
+                    final_output = {"messages": [value], "image_url": []}
             yield (value)
+    
+    if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
+        result = final_output["messages"][-1].content
+        # save event to memory
+        if memory_id is not None:
+            agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+    else:
+        result = "답변을 찾지 못하였습니다."        
+    logger.info(f"result: {result}")
 
 if __name__ == "__main__":
     app.run()

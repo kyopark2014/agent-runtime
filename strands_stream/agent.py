@@ -459,12 +459,24 @@ async def agentcore_strands(payload):
     logger.info(f"tool_list: {tool_list}")    
 
     # run agent
+    result = ""
     with mcp_manager.get_active_clients(mcp_servers) as _:
         agent_stream = agent.stream_async(query)
 
         async for event in agent_stream:
-            # logger.info(f"event: {event}")
+            if "result" in event:
+                logger.info(f"event: {event}")
+                final = event["result"]                
+                message = final.message
+                if message:
+                    content = message.get("content", [])
+                    result = content[0].get("text", "")
+                    logger.info(f"result: {result}")
             yield (event)
+    
+    # save event to memory
+    if memory_id is not None and result:
+        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
 
 if __name__ == "__main__":
     app.run()
