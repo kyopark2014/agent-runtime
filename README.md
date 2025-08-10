@@ -231,7 +231,7 @@ async def agent_langgraph(payload):
             yield (value)
 ```
 
-### Strands 
+#### Strands 
 
 [Strands - agent.py](./application/strands_stream/agent.py)와 같이 stream으로 처리합니다. 아래와 같이 AgentCore를 endpoint로 지정할 때에 agent_stream의 값을 yeild로 전달하면 streamlit 같은 client에서 동적으로 응답을 받을 수 있습니다.
 
