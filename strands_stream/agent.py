@@ -6,6 +6,7 @@ import logging
 import sys
 import utils
 import boto3
+import agentcore_memory
 
 from contextlib import contextmanager
 from typing import Dict, List, Optional
@@ -420,6 +421,33 @@ async def agentcore_strands(payload):
 
     global tool_list
     tool_list = []
+
+    # initate memory variables
+    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
+    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
+    if memory_id is None:
+        # retrieve memory id
+        memory_id = agentcore_memory.retrieve_memory_id()
+        logger.info(f"memory_id: {memory_id}")        
+        
+        # create memory if not exists
+        if memory_id is None:
+            logger.info(f"Memory will be created...")
+            memory_id = agentcore_memory.create_memory(namespace)
+            logger.info(f"Memory was created... {memory_id}")
+        
+        # create strategy if not exists
+        agentcore_memory.create_strategy_if_not_exists(
+            memory_id=memory_id, namespace=namespace, strategy_name=chat.user_id)
+
+        # save memory variables
+        agentcore_memory.update_memory_variables(
+            user_id=chat.user_id, 
+            memory_id=memory_id, 
+            actor_id=actor_id, 
+            session_id=session_id, 
+            namespace=namespace)
     
     # initiate agent
     await initiate_agent(

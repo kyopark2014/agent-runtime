@@ -12,7 +12,7 @@ logging.basicConfig(
         logging.StreamHandler(sys.stderr)
     ]
 )
-logger = logging.getLogger("memory")
+logger = logging.getLogger("long_term_memory")
 
 try:
     mcp = FastMCP(
@@ -31,7 +31,7 @@ except Exception as e:
 # memory
 ######################################
 @mcp.tool()
-def agent_core_memory(
+def long_term_memory(
     action: str,
     content: Optional[str] = None,
     query: Optional[str] = None,
@@ -87,7 +87,13 @@ def agent_core_memory(
     logger.info(f"###### agent_core_memory ######")
     logger.info(f"action: {action}")
 
-    return mcp_long_term_memory.agent_core_memory(action, content, query, memory_record_id, max_results, next_token)
+    return mcp_long_term_memory.agent_core_memory(
+        action=action, 
+        content=content, 
+        query=query, 
+        memory_record_id=memory_record_id, 
+        max_results=max_results, 
+        next_token=next_token)
 
 if __name__ =="__main__":
     print(f"###### main ######")

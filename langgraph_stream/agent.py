@@ -5,6 +5,7 @@ import traceback
 import chat
 import utils
 import mcp_config
+import agentcore_memory
 
 from langgraph.prebuilt import ToolNode
 from typing import Literal
@@ -36,6 +37,7 @@ s3_prefix = "docs"
 capture_prefix = "captures"
 
 mcp_server_info = {}
+user_id = "langgraph"
 
 def get_tool_info(tool_name, tool_content):
     tool_references = []    
@@ -565,6 +567,32 @@ async def agent_langgraph(payload):
     image_urls = []
     references = []
 
+    # initate memory variables    
+    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+
+    if memory_id is None:
+        # retrieve memory id
+        memory_id = agentcore_memory.retrieve_memory_id()
+        logger.info(f"memory_id: {memory_id}")        
+        
+        # create memory if not exists
+        if memory_id is None:
+            logger.info(f"Memory will be created...")
+            memory_id = agentcore_memory.create_memory(namespace)
+            logger.info(f"Memory was created... {memory_id}")
+        
+        # create strategy if not exists
+        agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=user_id)
+
+        # save memory variables
+        agentcore_memory.update_memory_variables(
+            user_id=user_id, 
+            memory_id=memory_id, 
+            actor_id=actor_id, 
+            session_id=session_id, 
+            namespace=namespace)
+
     global index
     index = 0
 
@@ -583,7 +611,7 @@ async def agent_langgraph(payload):
     app = buildChatAgentWithHistory(tools)
     config = {
         "recursion_limit": 50,
-        "configurable": {"thread_id": chat.user_id},
+        "configurable": {"thread_id": user_id},
         "tools": tools,
         "system_prompt": None
     }

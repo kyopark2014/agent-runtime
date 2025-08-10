@@ -65,6 +65,7 @@ memorystore = InMemoryStore()
 
 # Default reasoning mode
 reasoning_mode = 'Disable'
+user_id = 'langgraph'
 
 def update(modelName, userId):
     global model_name, models, model_type, model_id, user_id

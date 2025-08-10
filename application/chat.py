@@ -721,7 +721,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
             logger.error(error_msg)
             return f"Error: {error_msg}"
         
-        # response_body가 bytes인 경우 decode
+        # decode if response_body is bytes
         if isinstance(response_body, bytes):
             response_body = response_body.decode('utf-8')
             
