@@ -259,7 +259,7 @@ async def agentcore_strands(payload):
             yield (event)
 ```
 
-### Client의 Stream
+#### Client
 
 AgentCore로 agent_runtime_arn을 이용해 request에 대한 응답을 얻습니다. 이때 content-type이 "text/event-stream"인 경우에 줄단위로 잘라서 prefix인 "data:"를 제거한 후에 json parser를 이용해 얻어진 값을 목적에 맞게 활용합니다.
 
