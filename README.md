@@ -198,7 +198,9 @@ Knowledge Base에서 문서를 활용하기 위해서는 S3에 문서 등록 및
 <img width="1533" height="287" alt="noname" src="https://github.com/user-attachments/assets/2edd3b6b-dbce-4784-b640-139fa84cc223" />
 
 
-### Stream의 처리
+### Stream
+
+AgentCore는 SSE 방식의 stream을 제공합니다. 
 
 #### LangGraph
 
