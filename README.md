@@ -305,7 +305,7 @@ async def agentcore_strands(payload):
 
 #### Client
 
-AgentCore로 agent_runtime_arn을 이용해 request에 대한 응답을 얻습니다. 이때 content-type이 "text/event-stream"인 경우에 줄단위로 잘라서 prefix인 "data:"를 제거한 후에 json parser를 이용해 얻어진 값을 목적에 맞게 활용합니다.
+AgentCore로 agent_runtime_arn을 이용해 request에 대한 응답을 얻습니다. 이때 content-type이 "text/event-stream"인 경우에 prefix인 "data:"를 제거한 후에 json parser를 이용해 얻어진 값을 목적에 맞게 활용합니다.
 
 ```python
 agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
@@ -316,17 +316,46 @@ response = agent_core_client.invoke_agent_runtime(
     qualifier="DEFAULT" # DEFAULT or LATEST
 )
 
-response_body = response['response'].read()
-if isinstance(response_body, bytes):
-    response_body = response_body.decode('utf-8')
-content_type = "text/event-stream" if response_body.startswith('data:') else "application/json"
+result = current = ""
+processed_data = set()  # Prevent duplicate data
 
-if content_type.startswith('text/event-stream'):
-    lines = response_body.split('\n')
-    for line in lines:
-        if line.startswith('data:'):
-            data = line[5:].strip()  # Remove "data:" prefix and whitespace
-            data_json = json.loads(data)
+# stream response
+if "text/event-stream" in response.get("contentType", ""):
+    for line in response["response"].iter_lines(chunk_size=10):
+        line = line.decode("utf-8")        
+        if line.startswith('data: '):
+            data = line[6:].strip()  # Remove "data:" prefix and whitespace
+            if data:  # Only process non-empty data
+                # Check for duplicate data
+                if data in processed_data:
+                    continue
+                processed_data.add(data)
+                
+                data_json = json.loads(data)
+                if 'data' in data_json:
+                    text = data_json['data']
+                    logger.info(f"[data] {text}")
+                    current += text
+                    containers['result'].markdown(current)
+                elif 'result' in data_json:
+                    result = data_json['result']
+                elif 'tool' in data_json:
+                    tool = data_json['tool']
+                    input = data_json['input']
+                    toolUseId = data_json['toolUseId']
+                    if toolUseId not in tool_info_list: # new tool info
+                        tool_info_list[toolUseId] = index                                        
+                        add_notification(containers, f"Tool: {tool}, Input: {input}")
+                    else: # overwrite tool info
+                        containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")                    
+                elif 'toolResult' in data_json:
+                    toolResult = data_json['toolResult']
+                    toolUseId = data_json['toolUseId']
+                    if toolUseId not in tool_result_list:  # new tool result
+                        tool_result_list[toolUseId] = index
+                        add_notification(containers, f"Tool Result: {toolResult}")
+                    else: # overwrite tool result
+                        containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {toolResult}")
 ```
 
 
