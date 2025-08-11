@@ -1049,8 +1049,16 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         logger.info(f"{data_json}")
                                 else: # langgraph   
                                     logger.info(f"DEBUG: data_json type: {type(data_json)}")
-                                    logger.info(f"DEBUG: data_json content: {str(data_json)[:200]}...")
+                                    logger.info(f"DEBUG: data_json content: {str(data_json)}...")
                                     
+                                    # if 'result' in data_json:
+                                    #     agent_result = data_json['result']
+                                    #     logger.info(f"agent_result: {agent_result}")
+                                    #     message = agent_result.message
+                                    #     content = message.get('content', [])
+                                    #     result = content[0].get('text', '')
+                                    #     logger.info(f"result: {result}")
+                                        
                                     parsed_data_json = data_json
                                     
                                     if isinstance(data_json, str):

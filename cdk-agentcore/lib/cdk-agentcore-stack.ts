@@ -474,6 +474,10 @@ export class CdkAgentcoreStack extends cdk.Stack {
         'cloudwatch:GetMetricWidgetImage',
         'cloudwatch:GetMetricData',
         'cloudwatch:GetMetricData',
+        'xray:PutTraceSegments',
+        'xray:PutTelemetryRecords',
+        'xray:PutAttributes',
+        'xray:GetTraceSummaries'
       ]
     }));
 
