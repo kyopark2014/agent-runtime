@@ -230,7 +230,22 @@ async def agent_langgraph(payload):
     async for output in app.astream(inputs, config):
         for key, value in output.items():
             logger.info(f"--> key: {key}, value: {value}")
-            yield (value)
+
+            if "messages" in value:
+                for message in value["messages"]:
+                    if isinstance(message, AIMessage):
+                        yield({'data': message.content})
+                        tool_calls = message.tool_calls
+                        if tool_calls:
+                            for tool_call in tool_calls:
+                                tool_name = tool_call["name"]
+                                tool_content = tool_call["args"]
+                                toolUseId = tool_call["id"]
+                                yield({'tool': tool_name, 'input': tool_content, 'toolUseId': toolUseId})
+                    elif isinstance(message, ToolMessage):
+                        toolResult = message.content
+                        toolUseId = message.tool_call_id
+                        yield({'toolResult': toolResult, 'toolUseId': toolUseId})
 ```
 
 #### Strands 
@@ -256,7 +271,36 @@ async def agentcore_strands(payload):
         agent_stream = agent.stream_async(query)
 
         async for event in agent_stream:
-            yield (event)
+            text = ""            
+            if "data" in event:
+                text = event["data"]
+                stream = {'data': text}
+            elif "result" in event:
+                final = event["result"]                
+                message = final.message
+                if message:
+                    content = message.get("content", [])
+                    result = content[0].get("text", "")
+                    stream = {'result': result}
+            elif "current_tool_use" in event:
+                current_tool_use = event["current_tool_use"]
+                name = current_tool_use.get("name", "")
+                input = current_tool_use.get("input", "")
+                toolUseId = current_tool_use.get("toolUseId", "")
+                text = f"name: {name}, input: {input}"
+                stream = {'tool': name, 'input': input, 'toolUseId': toolUseId}            
+            elif "message" in event:
+                message = event["message"]
+                if "content" in message:
+                    content = message["content"]
+                    if "toolResult" in content[0]:
+                        toolResult = content[0]["toolResult"]
+                        toolUseId = toolResult["toolUseId"]
+                        toolContent = toolResult["content"]
+                        toolResult = toolContent[0].get("text", "")
+                        stream = {'toolResult': toolResult, 'toolUseId': toolUseId}
+
+            yield (stream)
 ```
 
 #### Client
