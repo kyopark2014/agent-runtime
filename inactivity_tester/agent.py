@@ -172,19 +172,11 @@ async def agentcore_strands(payload):
                     content = message.get("content", [])
                     result = content[0].get("text", "")
                     logger.info(f"result: {result}")
-            yield (event)
-        
+            
         time_diff = time.time() - current_time
         logger.info(f"time_diff: {time_diff}")
+        yield (f"{int(time_diff)}")
         
-        # Yield time_diff information as a separate event
-        yield {
-            "type": "time_diff",
-            "time_diff": time_diff,
-            "current_time": current_time,
-            "timestamp": time.time()
-        }
-
         if time_diff > 1200:
             logger.info("close this test.")
             break
