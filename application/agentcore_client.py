@@ -267,6 +267,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                             logger.error(f"Error processing data: {e}")
                             break
     
+        logger.info(f"result: {result}")
         return result
         
     except Exception as e:

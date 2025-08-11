@@ -633,16 +633,45 @@ async def agent_langgraph(payload):
                     final_output = {"messages": value, "image_url": []}
                 else:
                     final_output = {"messages": [value], "image_url": []}
-            yield (value)
+
+            if "messages" in value:
+                for message in value["messages"]:
+                    # if isinstance(message, HumanMessage):
+                    #     logger.info(f"HumanMessage: {message.content}")
+                    if isinstance(message, AIMessage):
+                        logger.info(f"AIMessage: {message.content}")
+
+                        yield({'data': message.content})
+
+                        tool_calls = message.tool_calls
+                        logger.info(f"tool_calls: {tool_calls}")
+
+                        if tool_calls:
+                            for tool_call in tool_calls:
+                                tool_name = tool_call["name"]
+                                tool_content = tool_call["args"]
+                                toolUseId = tool_call["id"]
+                                logger.info(f"tool_name: {tool_name}, content: {tool_content}, toolUseId: {toolUseId}")
+                                yield({'tool': tool_name, 'input': tool_content, 'toolUseId': toolUseId})
+
+                    elif isinstance(message, ToolMessage):
+                        logger.info(f"ToolMessage: {message.name}, {message.content}")
+
+                        toolResult = message.content
+                        toolUseId = message.tool_call_id
+
+                        yield({'toolResult': toolResult, 'toolUseId': toolUseId})
     
     if final_output and "messages" in final_output and len(final_output["messages"]) > 0:
         result = final_output["messages"][-1].content
         # save event to memory
-        if memory_id is not None:
-            agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+        # if memory_id is not None:
+        #     agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
     else:
         result = "답변을 찾지 못하였습니다."        
     logger.info(f"result: {result}")
+
+    yield({'result': result})
 
 if __name__ == "__main__":
     app.run()
