@@ -44,12 +44,12 @@ def get_model():
     maxReasoningOutputTokens=64000
     thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens-1000)
 
-    # AWS 자격 증명 설정
+    # AWS credentials setup
     aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
     aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
 
-    # Bedrock 클라이언트 설정
+    # Bedrock client configuration
     bedrock_config = Config(
         read_timeout=900,
         connect_timeout=900,
@@ -150,14 +150,18 @@ async def agentcore_strands(payload):
     model_name = payload.get("model_name")
     logger.info(f"model_name: {model_name}")
     
-    # initiate agent
+    # Initialize agent
     agent = create_agent(
         system_prompt=None, 
         tools=[], 
         history_mode='Disable')
 
+    # Get current time
+    current_time = time.time()
+    logger.info(f"current_time: {current_time}")
+
     while True:
-        agent_stream = agent.stream_async(query)
+        agent_stream = agent.stream_async(query)        
 
         async for event in agent_stream:
             if "result" in event:
@@ -169,9 +173,27 @@ async def agentcore_strands(payload):
                     result = content[0].get("text", "")
                     logger.info(f"result: {result}")
             yield (event)
+        
+        time_diff = time.time() - current_time
+        logger.info(f"time_diff: {time_diff}")
+        
+        # Yield time_diff information as a separate event
+        yield {
+            "type": "time_diff",
+            "time_diff": time_diff,
+            "current_time": current_time,
+            "timestamp": time.time()
+        }
 
-        time.sleep(10)
+        if time_diff > 1200:
+            logger.info("close this test.")
+            break
 
+        time.sleep(30)
+    
+    # End time
+    end_time = time.time()
+    logger.info(f"end_time: {end_time}")
 if __name__ == "__main__":
     app.run()
 

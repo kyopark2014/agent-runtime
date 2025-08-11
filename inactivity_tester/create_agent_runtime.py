@@ -60,7 +60,12 @@ if len(agentRuntimes) > 0:
             break
 
 def update_agentcore_json(agentRuntimeArn):
-    fname = 'agentcore.json'        
+    if agentRuntimeArn is None:
+        print("agentRuntimeArn is None, skipping update_agentcore_json")
+        return
+        
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    fname = os.path.join(script_dir, 'agentcore.json')        
     try:
         with open(fname, 'r') as f:
             config = json.load(f)        
