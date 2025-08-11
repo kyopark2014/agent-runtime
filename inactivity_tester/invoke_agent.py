@@ -38,57 +38,21 @@ try:
                 line = line.decode("utf-8")
                 if line.startswith("data: "):
                     line = line[6:]
-                    # print(f"line: {line}")
-                    if isinstance(line, str):
-                        try:
-                            # Try JSON parsing first
-                            json_line = json.loads(line)
-                            print(f"JSON parsed: {type(json_line)}")
-                            # Check if the result is actually a dictionary
-                            if isinstance(json_line, dict) and "message" in json_line:
-                                message = json_line["message"]
-                                print(f"Message: {type(message)}")
-                                if "content" in message:
-                                    content_list = message["content"]
-                                    print(f"Content list: {type(content_list)}, value: {content_list}")
-                                    if isinstance(content_list, list) and len(content_list) > 0:
-                                        print(f"text: {content_list[0]['text']}")
-                                        content.append(content_list[0]['text'])
-                            else:
-                                # If JSON parsing returned a string, it's likely a Python object string
-                                raise json.JSONDecodeError("Not a valid JSON object", line, 0)
-                        except json.JSONDecodeError:
-                            # If JSON parsing fails, try ast.literal_eval for Python object strings
-                            try:
-                                import ast
-                                parsed_line = ast.literal_eval(line)
-                                print(f"AST parsed: {type(parsed_line)}")
-                                if isinstance(parsed_line, dict) and "result" in parsed_line:
-                                    result = parsed_line["result"]
-                                    print(f"Result: {type(result)}")
-                                    if hasattr(result, 'message') and result.message:
-                                        message = result.message
-                                        print(f"Result message: {type(message)}")
-                                        if "content" in message:
-                                            content_list = message["content"]
-                                            print(f"Result content: {type(content_list)}, value: {content_list}")
-                                            if isinstance(content_list, list) and len(content_list) > 0:
-                                                print(f"text: {content_list[0]['text']}")
-                                                content.append(content_list[0]['text'])
-                            except (ValueError, SyntaxError, AttributeError) as e:
-                                print(f"AST parsing error: {e}")
-                                # Try to extract text using string manipulation for complex objects
-                                try:
-                                    if "'text': '" in line:
-                                        start_idx = line.find("'text': '") + 9
-                                        end_idx = line.find("'", start_idx)
-                                        if start_idx > 8 and end_idx > start_idx:
-                                            extracted_text = line[start_idx:end_idx]
-                                            print(f"Extracted text: {extracted_text}")
-                                            content.append(extracted_text)
-                                except Exception as extract_error:
-                                    print(f"Text extraction error: {extract_error}")
-                                    pass
+
+                    try:
+                        stream = json.loads(line)
+
+                        if 'data' in stream:
+                            text = stream['data']
+                            print(f"[data] {text}")
+                        elif 'result' in stream:
+                            result = stream['result']
+                            print(f"[result] {result}")
+                        else:
+                            print(f"[other] {stream}")
+                    except json.JSONDecodeError:
+                        pass
+
         print("\nComplete response:", "\n".join(content))
 
     elif response.get("contentType") == "application/json":

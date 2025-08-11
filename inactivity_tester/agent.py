@@ -163,16 +163,57 @@ async def agentcore_strands(payload):
     while True:
         agent_stream = agent.stream_async(query)        
 
+        stream = ""
         async for event in agent_stream:
-            if "result" in event:
-                logger.info(f"event: {event}")
+            text = ""            
+            if "data" in event:
+                text = event["data"]
+                logger.info(f"[data] {text}")
+                stream = {'data': text}
+
+            elif "result" in event:
                 final = event["result"]                
                 message = final.message
                 if message:
                     content = message.get("content", [])
                     result = content[0].get("text", "")
-                    logger.info(f"result: {result}")
+                    logger.info(f"[result] {result}")
+                    stream = {'result': result}
+
+            elif "current_tool_use" in event:
+                current_tool_use = event["current_tool_use"]
+                logger.info(f"current_tool_use: {current_tool_use}")
+                name = current_tool_use.get("name", "")
+                input = current_tool_use.get("input", "")
+                toolUseId = current_tool_use.get("toolUseId", "")
+
+                text = f"name: {name}, input: {input}"
+                logger.info(f"[current_tool_use] {text}")
+                stream = {'tool': name, 'input': input, 'toolUseId': toolUseId}
             
+            elif "message" in event:
+                message = event["message"]
+                logger.info(f"[message] {message}")
+
+                if "content" in message:
+                    content = message["content"]
+                    logger.info(f"tool content: {content}")
+                    if "toolResult" in content[0]:
+                        toolResult = content[0]["toolResult"]
+                        toolUseId = toolResult["toolUseId"]
+                        toolContent = toolResult["content"]
+                        toolResult = toolContent[0].get("text", "")
+                        logger.info(f"[toolResult] {toolResult}, [toolUseId] {toolUseId}")
+                        stream = {'toolResult': toolResult, 'toolUseId': toolUseId}
+            
+            elif "contentBlockDelta" or "contentBlockStop" or "messageStop" or "metadata" in event:
+                pass
+
+            else:
+                logger.info(f"event: {event}")
+
+            yield (stream)
+                
         time_diff = time.time() - current_time
         logger.info(f"time_diff: {time_diff}")
         yield (f"{int(time_diff)}")
@@ -181,7 +222,7 @@ async def agentcore_strands(payload):
             logger.info("close this test.")
             break
 
-        time.sleep(30)
+        time.sleep(10)
     
     # End time
     end_time = time.time()

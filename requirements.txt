@@ -38,3 +38,4 @@ strands-agents>=0.1.0
 strands-agents-tools
 reportlab
 nova-act
+sseclient-py

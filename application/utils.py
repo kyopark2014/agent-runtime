@@ -1,7 +1,6 @@
 import logging
 import sys
 import json
-import traceback
 import boto3
 import os
 
