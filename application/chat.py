@@ -4,16 +4,12 @@ import uuid
 import os
 import logging
 import sys
-import requests
-import knowledge_base
 import traceback
 import base64
 import info
 import re
 import csv
 import PyPDF2
-import ast
-import sseclient
 
 from io import BytesIO
 from PIL import Image
@@ -22,9 +18,8 @@ from urllib import parse
 from langchain_aws import ChatBedrock
 from botocore.config import Config
 from langchain.docstore.document import Document
-from langchain_core.prompts import MessagesPlaceholder, ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from bedrock_agentcore.memory import MemoryClient
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 logging.basicConfig(
@@ -49,35 +44,9 @@ def load_config():
 
 config = load_config()
 
-index = 0
-def add_notification(containers, message):
-    global index
-    if containers is not None:
-        containers['notification'][index].info(message)
-    index += 1
-
 bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
-
-def load_agentcore_config():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph_stream', "agentcore.json")
-    with open(langgraph_arn_path, "r", encoding="utf-8") as f:
-        langgraph_data = json.load(f)
-        langgraph_agent_runtime_arn = langgraph_data['agent_runtime_arn']
-        logger.info(f"langgraph_agent_runtime_arn: {langgraph_agent_runtime_arn}")
-    
-    strands_arn_path = os.path.join(script_dir, "..", 'strands_stream', "agentcore.json")
-    with open(strands_arn_path, "r", encoding="utf-8") as f:
-        strands_data = json.load(f)
-        strands_agent_runtime_arn = strands_data['agent_runtime_arn']
-        logger.info(f"strands_agent_runtime_arn: {strands_agent_runtime_arn}")
-    
-    return langgraph_agent_runtime_arn, strands_agent_runtime_arn, 
-
-langgraph_agent_runtime_arn, strands_agent_runtime_arn = load_agentcore_config()
 
 model_name = "Claude 3.5 Sonnet"
 model_type = "claude"
@@ -684,185 +653,3 @@ def get_summary_of_uploaded_file(file_name, st):
 
     return msg
 
-def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, containers):
-    user_id = agent_type # for testing
-    logger.info(f"user_id: {user_id}")
-
-    payload = json.dumps({
-        "prompt": prompt,
-        "mcp_servers": mcp_servers,
-        "model_name": model_name,
-        "user_id": user_id,
-        "history_mode": history_mode
-    })
-
-    if agent_type == 'langgraph':
-        agent_runtime_arn = langgraph_agent_runtime_arn
-    else: 
-        agent_runtime_arn = strands_agent_runtime_arn
-
-    logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
-    logger.info(f"Payload: {payload}")
-    
-    try:
-        agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
-        response = agent_core_client.invoke_agent_runtime(
-            agentRuntimeArn=agent_runtime_arn,
-            runtimeSessionId=runtime_session_id,
-            payload=payload,
-            qualifier="DEFAULT" # DEFAULT or LATEST
-        )
-        
-        result = current = ""
-        # stream response
-        if "text/event-stream" in response.get("contentType", ""):
-            for line in response["response"].iter_lines(chunk_size=10):
-                line = line.decode("utf-8")
-                
-                if line.startswith('data:'):
-                    data = line[5:].strip()  # Remove "data:" prefix and whitespace
-                    try:
-                        data_json = json.loads(data)
-
-                        if 'data' in data_json:
-                            text = data_json['data']
-                            logger.info(f"[data] {text}")
-                            current += text
-                            containers['result'].markdown(current)
-                        elif 'result' in data_json:
-                            result = data_json['result']
-                            logger.info(f"[result] {result}")
-                            containers['result'].markdown(result)
-                        elif 'tool' in data_json:
-                            tool = data_json['tool']
-                            input = data_json['input']
-                            toolUseId = data_json['toolUseId']
-                            logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
-
-                            if toolUseId not in tool_info_list: # new tool info
-                                logger.info(f"new tool info: {toolUseId} -> {index}")
-                                tool_info_list[toolUseId] = index                                        
-                                add_notification(containers, f"Tool: {tool}, Input: {input}")
-                            else: # overwrite tool info
-                                logger.info(f"overwrite tool info: {toolUseId} -> {index}")
-                                containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
-                            
-                        elif 'toolResult' in data_json:
-                            toolResult = data_json['toolResult']
-                            toolUseId = data_json['toolUseId']
-                            logger.info(f"[tool_result] {toolResult}")
-
-                            if toolUseId not in tool_result_list:  # new tool result
-                                tool_result_list[toolUseId] = index
-                                add_notification(containers, f"Tool Result: {toolResult}")
-                            else: # overwrite tool result
-                                containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {toolResult}")
-
-                    except json.JSONDecodeError:
-                        logger.info(f"Not JSON: {data}")
-    
-        return result
-        
-    except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(error_msg)
-        return f"Error: {error_msg}"
-
-tool_info_list = dict()
-tool_result_list = dict()
-
-def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_name, containers):
-    global index
-    index = 0
-
-    user_id = agent_type
-    logger.info(f"user_id: {user_id}")
-
-    payload = json.dumps({
-        "prompt": prompt,
-        "mcp_servers": mcp_servers,
-        "model_name": model_name,
-        "user_id": user_id,
-        "history_mode": history_mode
-    })
-
-    headers = {
-        "Content-Type": "application/json"
-    }   
-    destination = f"http://localhost:8080/invocations"
-
-    try:
-        logger.info(f"Sending request to Docker container at {destination}")
-        logger.info(f"Payload: {payload}")
-        
-        # Set headers for SSE connection
-        sse_headers = {
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive"
-        }
-        
-        # Connect using SSE client
-        response = requests.post(destination, headers=sse_headers, data=payload, timeout=300, stream=True)
-        
-        logger.info(f"response: {response}")
-        logger.info(f"Response status code: {response.status_code}")
-        logger.info(f"Response headers: {response.headers}")
-
-        result = current = ""
-        
-        # Create SSE client
-        client = sseclient.SSEClient(response)
-        
-        # Process SSE event stream
-        for event in client.events():
-            try:
-                data_json = json.loads(event.data)
-
-                if 'data' in data_json:
-                    text = data_json['data']
-                    logger.info(f"[data] {text}")
-                    current += text
-                    containers['result'].markdown(current)
-                elif 'result' in data_json:
-                    result = data_json['result']
-                    logger.info(f"[result] {result}")
-                    containers['result'].markdown(result)
-                elif 'tool' in data_json:
-                    tool = data_json['tool']
-                    input = data_json['input']
-                    toolUseId = data_json['toolUseId']
-                    logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
-
-                    if toolUseId not in tool_info_list: # new tool info
-                        logger.info(f"new tool info: {toolUseId} -> {index}")
-                        tool_info_list[toolUseId] = index                                        
-                        add_notification(containers, f"Tool: {tool}, Input: {input}")
-                    else: # overwrite tool info
-                        logger.info(f"overwrite tool info: {toolUseId} -> {index}")
-                        containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
-                    
-                elif 'toolResult' in data_json:
-                    toolResult = data_json['toolResult']
-                    toolUseId = data_json['toolUseId']
-                    logger.info(f"[tool_result] {toolResult}")
-
-                    if toolUseId not in tool_result_list:  # new tool result
-                        tool_result_list[toolUseId] = index
-                        add_notification(containers, f"Tool Result: {toolResult}")
-                    else: # overwrite tool result
-                        containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {toolResult}")
-
-            except json.JSONDecodeError:
-                logger.info(f"Not JSON: {event.data}")
-            except Exception as e:
-                logger.error(f"Error processing SSE event: {e}")
-                break
-    
-        return result
-        
-    except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(error_msg)
-        return f"Error: {error_msg}"

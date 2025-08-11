@@ -4,6 +4,7 @@ import logging
 import sys
 import os
 import knowledge_base as kb
+import agentcore_client
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -213,9 +214,9 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "result": st.empty()
                 } 
                 if platform == 'AgentCore':
-                    response = chat.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
+                    response = agentcore_client.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
                 else:                    
-                    response = chat.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
+                    response = agentcore_client.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
 
             image_url = []
             st.session_state.messages.append({
