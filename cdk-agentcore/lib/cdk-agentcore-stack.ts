@@ -119,7 +119,13 @@ export class CdkAgentcoreStack extends cdk.Stack {
     });
     const CreateLogPolicy = new iam.PolicyStatement({  
       resources: [`arn:aws:logs:${region}:${accountId}:*`],
-      actions: ['logs:CreateLogGroup','logs:DescribeLogStreams', 'logs:DescribeLogGroups', 'logs:CreateLogStream', 'logs:PutLogEvents'],
+      actions: [
+        'logs:CreateLogGroup',
+        'logs:DescribeLogStreams', 
+        'logs:DescribeLogGroups', 
+        'logs:CreateLogStream', 
+        'logs:PutLogEvents'
+      ]
     });        
     roleLambdaKnowledgeBase.attachInlinePolicy( 
       new iam.Policy(this, `log-policy-lambda-knowledge-base-for-${projectName}`, {
@@ -128,7 +134,9 @@ export class CdkAgentcoreStack extends cdk.Stack {
     );
     const CreateLogStreamPolicy = new iam.PolicyStatement({  
       resources: [`arn:aws:logs:${region}:${accountId}:log-group:/aws/lambda/*`],
-      actions: ["logs:CreateLogStream","logs:PutLogEvents"],
+      actions: [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"]
     });        
     roleLambdaKnowledgeBase.attachInlinePolicy( 
       new iam.Policy(this, `stream-log-policy-lambda-knowledge-base-for-${projectName}`, {
@@ -466,6 +474,7 @@ export class CdkAgentcoreStack extends cdk.Stack {
     }));
 
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
       resources: ['*'],
       actions: [
         'cloudwatch:ListMetrics', 
@@ -477,7 +486,12 @@ export class CdkAgentcoreStack extends cdk.Stack {
         'xray:PutTraceSegments',
         'xray:PutTelemetryRecords',
         'xray:PutAttributes',
-        'xray:GetTraceSummaries'
+        'xray:GetTraceSummaries',
+        'logs:CreateLogGroup',
+        'logs:DescribeLogStreams', 
+        'logs:DescribeLogGroups', 
+        'logs:CreateLogStream', 
+        'logs:PutLogEvents'
       ]
     }));
 

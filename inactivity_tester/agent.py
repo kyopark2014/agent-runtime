@@ -148,18 +148,12 @@ async def agentcore_strands(payload):
 
     model_name = payload.get("model_name")
     logger.info(f"model_name: {model_name}")
-
-    user_id = payload.get("user_id")
-    logger.info(f"user_id: {user_id}")
-
-    history_mode = payload.get("history_mode")
-    logger.info(f"history_mode: {history_mode}")
     
     # initiate agent
     agent = create_agent(
         system_prompt=None, 
         tools=[], 
-        history_mode=history_mode)
+        history_mode='Disable')
 
     agent_stream = agent.stream_async(query)
 
