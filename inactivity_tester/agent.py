@@ -5,6 +5,7 @@ import logging
 import sys
 import utils
 import boto3
+import time
 
 from strands.models import BedrockModel
 from strands.agent.conversation_manager import SlidingWindowConversationManager
@@ -155,18 +156,21 @@ async def agentcore_strands(payload):
         tools=[], 
         history_mode='Disable')
 
-    agent_stream = agent.stream_async(query)
+    while True:
+        agent_stream = agent.stream_async(query)
 
-    async for event in agent_stream:
-        if "result" in event:
-            logger.info(f"event: {event}")
-            final = event["result"]                
-            message = final.message
-            if message:
-                content = message.get("content", [])
-                result = content[0].get("text", "")
-                logger.info(f"result: {result}")
-        yield (event)
+        async for event in agent_stream:
+            if "result" in event:
+                logger.info(f"event: {event}")
+                final = event["result"]                
+                message = final.message
+                if message:
+                    content = message.get("content", [])
+                    result = content[0].get("text", "")
+                    logger.info(f"result: {result}")
+            yield (event)
+
+        time.sleep(10)
 
 if __name__ == "__main__":
     app.run()
