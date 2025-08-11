@@ -126,24 +126,6 @@ conversation_manager = SlidingWindowConversationManager(
     window_size=10,  
 )
 
-# Custom conversation manager to filter out empty messages
-class ValidatedConversationManager(SlidingWindowConversationManager):
-    def add_message(self, message):
-        # Filter out empty messages before adding to conversation
-        if hasattr(message, 'content') and message.content:
-            if isinstance(message.content, str) and message.content.strip():
-                super().add_message(message)
-            elif isinstance(message.content, list) and message.content:
-                # Handle list content (e.g., text blocks)
-                super().add_message(message)
-        else:
-            logger.warning(f"Skipping empty message: {message}")
-
-# Use validated conversation manager
-conversation_manager = ValidatedConversationManager(
-    window_size=10,
-)
-
 class MCPClientManager:
     def __init__(self):
         self.clients: Dict[str, MCPClient] = {}
@@ -306,7 +288,6 @@ def create_agent(system_prompt, tools, history_mode):
             "모르는 질문을 받으면 솔직히 모른다고 말합니다."
         )
 
-    # Validate system prompt is not empty
     if not system_prompt or not system_prompt.strip():
         system_prompt = "You are a helpful AI assistant."
 
@@ -412,9 +393,6 @@ async def agentcore_strands(payload):
 
     user_id = payload.get("user_id")
     logger.info(f"user_id: {user_id}")
-
-    debug_mode = 'Disable'
-    chat.update(modelName=model_name, debugMode=debug_mode, userId=user_id)
 
     history_mode = payload.get("history_mode")
     logger.info(f"history_mode: {history_mode}")
