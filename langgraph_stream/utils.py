@@ -42,6 +42,7 @@ config = load_config()
 bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
+agent_runtime_role = config['agent_runtime_role']
 
 def get_contents_type(file_name):
     if file_name.lower().endswith((".jpg", ".jpeg")):

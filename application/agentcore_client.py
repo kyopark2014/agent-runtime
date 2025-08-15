@@ -227,7 +227,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
         error_msg = f"Unexpected error: {str(e)}"
         logger.error(error_msg)
         return f"Error: {error_msg}"
-    
+
 def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, containers):
     global index
     index = 0

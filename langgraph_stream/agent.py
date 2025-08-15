@@ -438,7 +438,7 @@ async def call_model(state: State, config):
         err_msg = traceback.format_exc()
         logger.info(f"error message: {err_msg}")
 
-    return {"messages": [response], "image_url": image_url, "index": index}
+    return {"messages": [response], "image_url": image_url}
 
 async def should_continue(state: State, config) -> Literal["continue", "end"]:
     logger.info(f"###### should_continue ######")
@@ -568,33 +568,30 @@ async def agent_langgraph(payload):
     references = []
 
     # initate memory variables    
-    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
-    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+    # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    # logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
-    if memory_id is None:
-        # retrieve memory id
-        memory_id = agentcore_memory.retrieve_memory_id()
-        logger.info(f"memory_id: {memory_id}")        
+    # if memory_id is None:
+    #     # retrieve memory id
+    #     memory_id = agentcore_memory.retrieve_memory_id()
+    #     logger.info(f"memory_id: {memory_id}")        
         
-        # create memory if not exists
-        if memory_id is None:
-            logger.info(f"Memory will be created...")
-            memory_id = agentcore_memory.create_memory(namespace)
-            logger.info(f"Memory was created... {memory_id}")
+    #     # create memory if not exists
+    #     if memory_id is None:
+    #         logger.info(f"Memory will be created...")
+    #         memory_id = agentcore_memory.create_memory(namespace)
+    #         logger.info(f"Memory was created... {memory_id}")
         
-        # create strategy if not exists
-        agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=user_id)
+    #     # create strategy if not exists
+    #     agentcore_memory.create_strategy_if_not_exists(memory_id=memory_id, namespace=namespace, strategy_name=user_id)
 
-        # save memory variables
-        agentcore_memory.update_memory_variables(
-            user_id=user_id, 
-            memory_id=memory_id, 
-            actor_id=actor_id, 
-            session_id=session_id, 
-            namespace=namespace)
-
-    global index
-    index = 0
+    #     # save memory variables
+    #     agentcore_memory.update_memory_variables(
+    #         user_id=user_id, 
+    #         memory_id=memory_id, 
+    #         actor_id=actor_id, 
+    #         session_id=session_id, 
+    #         namespace=namespace)
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     logger.info(f"mcp_json: {mcp_json}")        

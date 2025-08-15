@@ -2,12 +2,25 @@ import boto3
 import json
 import utils
 import uuid
+import os
 
 region_name = utils.bedrock_region
 accountId = utils.accountId
 projectName = utils.projectName
 agent_runtime_role = utils.agent_runtime_role
-agentRuntimeArn = utils.agent_runtime_arn
+
+def load_agent_config():
+    config = None
+    
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "agentcore.json")
+    
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)    
+    return config
+
+agent_config = load_agent_config()
+agentRuntimeArn = agent_config['agent_runtime_arn']
 print(f"agentRuntimeArn: {agentRuntimeArn}")
 
 payload = json.dumps({
@@ -26,8 +39,14 @@ response = agent_core_client.invoke_agent_runtime(
 )
 
 response_body = response['response'].read()
-response_data = json.loads(response_body)
-print("Agent Response:", response_data)
+print(f"response_body: {response_body}")
+
+try:
+    response_data = json.loads(response_body)
+    print("Agent Response:", response_data)
+except json.JSONDecodeError:
+    print("Invalid JSON response")
+    print(response_body)
 
 # Process and print the response
 # if "text/event-stream" in response.get("contentType", ""):
@@ -48,6 +67,7 @@ print("Agent Response:", response_data)
 #     for chunk in response.get("response", []):
 #         content.append(chunk.decode('utf-8'))
 #         print(json.loads(''.join(content)))
+
 # else:
 #     # Print raw response
 #     print(response)
