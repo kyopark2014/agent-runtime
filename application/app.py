@@ -210,7 +210,7 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                 logger.info(f"mcp_servers: {mcp_servers}")
 
                 containers = {                        
-                    "notification": [st.empty() for _ in range(500)],
+                    "notification": [st.empty() for _ in range(1000)],
                     "result": st.empty()
                 } 
                 if platform == 'AgentCore':
