@@ -445,13 +445,22 @@ export class CdkAgentcoreStack extends cdk.Stack {
     novaActSecret.grantRead(agentRuntimeRole);
 
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
       resources: ['*'],
       actions: [
-        's3:ListAllMyBuckets'
+        's3:ListAllMyBuckets',
+        's3:ListBucket',
+        's3:GetObject',
+        's3:PutObject',
+        's3:DeleteObject',
+        's3:GetObjectAcl',
+        's3:PutObjectAcl',
+        's3:DeleteObjectAcl',
       ]
     }));
 
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
       resources: ['*'],
       actions: [
         'ec2:DescribeVolumes',
@@ -461,6 +470,7 @@ export class CdkAgentcoreStack extends cdk.Stack {
     }));
 
     agentRuntimeRole.addToPolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
       resources: ['*'],
       actions: [
         'eks:ListClusters',
@@ -469,7 +479,8 @@ export class CdkAgentcoreStack extends cdk.Stack {
         'eks:DescribeNodegroup',
         'eks:ListUpdates',
         'eks:DescribeUpdate',
-        'eks:ListFargateProfiles'
+        'eks:ListFargateProfiles',        
+        'ce:*'
       ]
     }));
 

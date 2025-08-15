@@ -143,7 +143,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                             
                             try:                                
                                 data_json = json.loads(data)
-                                logger.info(f"index: {index}")
+                                # logger.info(f"index: {index}")
                                 
                                 if agent_type == 'strands':
                                     if 'data' in data_json:
