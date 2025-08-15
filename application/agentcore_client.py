@@ -130,7 +130,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                 while '\n\n' in buffer:
                     event_data, buffer = buffer.split('\n\n', 1)
                 
-                 # Find data: lines
+                 # Find data: lines                
                 for line in event_data.split('\n'):
                     if line.startswith('data: '):
                         data = line[6:].strip()  # Remove "data: " prefix
@@ -141,52 +141,79 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                 continue
                             processed_data.add(data)
                             
-                            try:
+                            try:                                
                                 data_json = json.loads(data)
                                 logger.info(f"index: {index}")
                                 
-                                if 'data' in data_json:
-                                    text = data_json['data']
-                                    logger.info(f"[data] {text}")
-                                    current += text
-                                    # containers['result'].markdown(result)
-                                    update_streaming_result(containers, current)
-                                elif 'result' in data_json:
-                                    result = data_json['result']
-                                    logger.info(f"[result] {result}")
-                                    # containers['result'].markdown(result)
-                                    # update_streaming_result(containers, result)
-                                elif 'tool' in data_json:
-                                    tool = data_json['tool']
-                                    input = data_json['input']
-                                    toolUseId = data_json['toolUseId']
-                                    logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
+                                if agent_type == 'strands':
+                                    if 'data' in data_json:
+                                        text = data_json['data']
+                                        logger.info(f"[data] {text}")
+                                        current += text
+                                        # containers['result'].markdown(result)
+                                        update_streaming_result(containers, current)
+                                    elif 'result' in data_json:
+                                        result = data_json['result']
+                                        logger.info(f"[result] {result}")
+                                        # containers['result'].markdown(result)
+                                        # update_streaming_result(containers, result)
+                                    elif 'tool' in data_json:
+                                        tool = data_json['tool']
+                                        input = data_json['input']
+                                        toolUseId = data_json['toolUseId']
+                                        logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                    if toolUseId not in tool_info_list: # new tool info
-                                        index += 1
-                                        logger.info(f"new tool info: {toolUseId} -> {index}")
-                                        tool_info_list[toolUseId] = index
+                                        if toolUseId not in tool_info_list: # new tool info
+                                            index += 1
+                                            current = ""
+                                            logger.info(f"new tool info: {toolUseId} -> {index}")
+                                            tool_info_list[toolUseId] = index
+                                            add_notification(containers, f"Tool: {tool}, Input: {input}")
+                                            # containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
+
+                                        else: # overwrite tool info if already exists
+                                            logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
+                                            # update_tool_notification(containers, tool_info_list[toolUseId], f"Tool: {tool}, Input: {input}")
+                                            containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
+                                        
+                                    elif 'toolResult' in data_json:                                    
+                                        toolResult = data_json['toolResult']
+                                        toolUseId = data_json['toolUseId']
+                                        logger.info(f"[tool_result] {toolResult}")
+
+                                        if toolUseId not in tool_result_list:  # new tool result
+                                            index += 1
+                                            logger.info(f"new tool result: {toolUseId} -> {index}")
+                                            tool_result_list[toolUseId] = index
+                                            add_notification(containers, f"Tool Result: {str(toolResult)}")
+                                        else: # overwrite tool result
+                                            logger.info(f"overwrite tool result: {toolUseId} -> {tool_result_list[toolUseId]}")
+                                            containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {str(toolResult)}")
+                                else: # langgraph
+                                    if 'data' in data_json:
+                                        text = data_json['data']
+                                        logger.info(f"[data] {text}")
+                                        update_streaming_result(containers, text)
+                                    elif 'result' in data_json:
+                                        result = data_json['result']
+                                        logger.info(f"[result] {result}")
+                                    elif 'tool' in data_json:
+                                        tool = data_json['tool']
+                                        input = data_json['input']
+                                        toolUseId = data_json['toolUseId']
+                                        logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
+
+                                        logger.info(f"tool info: {toolUseId} -> {index}")
                                         add_notification(containers, f"Tool: {tool}, Input: {input}")
-                                        # containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
+                                        
+                                    elif 'toolResult' in data_json:
+                                        toolResult = data_json['toolResult']
+                                        toolUseId = data_json['toolUseId']
+                                        logger.info(f"[tool_result] {toolResult}")
 
-                                    else: # overwrite tool info if already exists
-                                        logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
-                                        # update_tool_notification(containers, tool_info_list[toolUseId], f"Tool: {tool}, Input: {input}")
-                                        containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
-                                    
-                                elif 'toolResult' in data_json:                                    
-                                    toolResult = data_json['toolResult']
-                                    toolUseId = data_json['toolUseId']
-                                    logger.info(f"[tool_result] {toolResult}")
-
-                                    if toolUseId not in tool_result_list:  # new tool result
-                                        index += 1
-                                        logger.info(f"new tool result: {toolUseId} -> {index}")
                                         tool_result_list[toolUseId] = index
+                                        logger.info(f"tool result: {toolUseId} -> {index}")                                    
                                         add_notification(containers, f"Tool Result: {str(toolResult)}")
-                                    else: # overwrite tool result
-                                        logger.info(f"overwrite tool result: {toolUseId} -> {tool_result_list[toolUseId]}")
-                                        containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {str(toolResult)}")
 
                             except json.JSONDecodeError:
                                 logger.info(f"Not JSON: {data}")
@@ -253,48 +280,74 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                         try:
                             data_json = json.loads(data)
 
-                            if 'data' in data_json:
-                                text = data_json['data']
-                                logger.info(f"[data] {text}")
-                                current += text
-                                # containers['result'].markdown(current)
-                                update_streaming_result(containers, current)
-                            elif 'result' in data_json:
-                                result = data_json['result']
-                                logger.info(f"[result] {result}")
-                                # containers['result'].markdown(result)
-                            elif 'tool' in data_json:
-                                tool = data_json['tool']
-                                input = data_json['input']
-                                toolUseId = data_json['toolUseId']
-                                logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
+                            if agent_type == 'strands':
+                                if 'data' in data_json:
+                                    text = data_json['data']
+                                    logger.info(f"[data] {text}")
+                                    current += text
+                                    # containers['result'].markdown(current)
+                                    update_streaming_result(containers, current)
+                                elif 'result' in data_json:
+                                    result = data_json['result']
+                                    logger.info(f"[result] {result}")
+                                    # containers['result'].markdown(result)
+                                elif 'tool' in data_json:
+                                    tool = data_json['tool']
+                                    input = data_json['input']
+                                    toolUseId = data_json['toolUseId']
+                                    logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                if toolUseId not in tool_info_list: # new tool info
-                                    index += 1
-                                    logger.info(f"new tool info: {toolUseId} -> {index}")
-                                    tool_info_list[toolUseId] = index                                        
+                                    if toolUseId not in tool_info_list: # new tool info
+                                        index += 1
+                                        current = ""
+                                        logger.info(f"new tool info: {toolUseId} -> {index}")
+                                        tool_info_list[toolUseId] = index                                        
+                                        add_notification(containers, f"Tool: {tool}, Input: {input}")
+                                        # containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
+                                    else: # overwrite tool info
+                                        logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
+                                        # update_tool_notification(containers, f"Tool: {tool}, Input: {input}")
+                                        containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
+                                    
+                                elif 'toolResult' in data_json:
+                                    toolResult = data_json['toolResult']
+                                    toolUseId = data_json['toolUseId']
+                                    logger.info(f"[tool_result] {toolResult}")
+
+                                    if toolUseId not in tool_result_list:  # new tool result    
+                                        index += 1
+                                        tool_result_list[toolUseId] = index
+                                        # add_notification(containers, f"Tool Result: {toolResult}")
+                                        logger.info(f"new tool result: {toolUseId} -> {index}")                                    
+                                        add_notification(containers, f"Tool Result: {str(toolResult)}")
+                                    else: # overwrite tool result
+                                        logger.info(f"overwrite tool result: {toolUseId} -> {tool_result_list[toolUseId]}")
+                                        containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {str(toolResult)}")
+                            else: # langgraph
+                                if 'data' in data_json:
+                                    text = data_json['data']
+                                    logger.info(f"[data] {text}")
+                                    update_streaming_result(containers, text)
+                                elif 'result' in data_json:
+                                    result = data_json['result']
+                                    logger.info(f"[result] {result}")
+                                elif 'tool' in data_json:
+                                    tool = data_json['tool']
+                                    input = data_json['input']
+                                    toolUseId = data_json['toolUseId']
+                                    logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
+
+                                    logger.info(f"tool info: {toolUseId} -> {index}")
                                     add_notification(containers, f"Tool: {tool}, Input: {input}")
-                                    # containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
-                                else: # overwrite tool info
-                                    logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
-                                    # update_tool_notification(containers, f"Tool: {tool}, Input: {input}")
-                                    containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
-                                
-                            elif 'toolResult' in data_json:
-                                toolResult = data_json['toolResult']
-                                toolUseId = data_json['toolUseId']
-                                logger.info(f"[tool_result] {toolResult}")
+                                    
+                                elif 'toolResult' in data_json:
+                                    toolResult = data_json['toolResult']
+                                    toolUseId = data_json['toolUseId']
+                                    logger.info(f"[tool_result] {toolResult}")
 
-                                if toolUseId not in tool_result_list:  # new tool result    
-                                    index += 1
                                     tool_result_list[toolUseId] = index
-                                    # add_notification(containers, f"Tool Result: {toolResult}")
-                                    logger.info(f"new tool result: {toolUseId} -> {index}")                                    
+                                    logger.info(f"tool result: {toolUseId} -> {index}")                                    
                                     add_notification(containers, f"Tool Result: {str(toolResult)}")
-                                else: # overwrite tool result
-                                    logger.info(f"overwrite tool result: {toolUseId} -> {tool_result_list[toolUseId]}")
-                                    containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {str(toolResult)}")
-                                    index += 1
 
                         except json.JSONDecodeError:
                             logger.info(f"Not JSON: {data}")
