@@ -475,13 +475,10 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         text = data_json['data']
                                         logger.info(f"[data] {text}")
                                         current += text
-                                        # containers['result'].markdown(result)
                                         update_streaming_result(containers, current)
                                     elif 'result' in data_json:
                                         result = data_json['result']
                                         logger.info(f"[result] {result}")
-                                        # containers['result'].markdown(result)
-                                        # update_streaming_result(containers, result)
                                     elif 'tool' in data_json:
                                         tool = data_json['tool']
                                         input = data_json['input']
@@ -495,11 +492,9 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                             tool_info_list[toolUseId] = index
                                             tool_name_list[toolUseId] = tool
                                             add_notification(containers, f"Tool: {tool}, Input: {input}")
-                                            # containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
 
                                         else: # overwrite tool info if already exists
                                             logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
-                                            # update_tool_notification(containers, tool_info_list[toolUseId], f"Tool: {tool}, Input: {input}")
                                             containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
                                         
                                     elif 'toolResult' in data_json:                                    
@@ -542,6 +537,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         tool = data_json['tool']
                                         input = data_json['input']
                                         toolUseId = data_json['toolUseId']
+                                        tool_name_list[toolUseId] = tool
                                         logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
                                         logger.info(f"tool info: {toolUseId} -> {index}")
@@ -550,11 +546,25 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                     elif 'toolResult' in data_json:
                                         toolResult = data_json['toolResult']
                                         toolUseId = data_json['toolUseId']
+                                        tool_name = tool_name_list[toolUseId]
                                         logger.info(f"[tool_result] {toolResult}")
 
                                         tool_result_list[toolUseId] = index
                                         logger.info(f"tool result: {toolUseId} -> {index}")                                    
                                         add_notification(containers, f"Tool Result: {str(toolResult)}")
+
+                                        content, urls, refs = get_tool_info(tool_name, toolResult)
+                                        if refs:
+                                            for r in refs:
+                                                references.append(r)
+                                            logger.info(f"refs: {refs}")
+                                        if urls:
+                                            for url in urls:
+                                                image_url.append(url)
+                                            logger.info(f"urls: {urls}")
+
+                                        if content:
+                                            logger.info(f"content: {content}")     
 
                             except json.JSONDecodeError:
                                 logger.info(f"Not JSON: {data}")
@@ -702,6 +712,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     tool = data_json['tool']
                                     input = data_json['input']
                                     toolUseId = data_json['toolUseId']
+                                    tool_name_list[toolUseId] = tool
                                     logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
                                     logger.info(f"tool info: {toolUseId} -> {index}")
@@ -710,12 +721,26 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                 elif 'toolResult' in data_json:
                                     toolResult = data_json['toolResult']
                                     toolUseId = data_json['toolUseId']
+                                    tool_name = tool_name_list[toolUseId]
                                     logger.info(f"[tool_result] {toolResult}")
 
                                     tool_result_list[toolUseId] = index
                                     logger.info(f"tool result: {toolUseId} -> {index}")                                    
                                     add_notification(containers, f"Tool Result: {str(toolResult)}")
 
+                                    content, urls, refs = get_tool_info(tool_name, toolResult)
+                                    if refs:
+                                        for r in refs:
+                                            references.append(r)
+                                        logger.info(f"refs: {refs}")
+                                    if urls:
+                                        for url in urls:
+                                            image_url.append(url)
+                                        logger.info(f"urls: {urls}")
+
+                                    if content:
+                                        logger.info(f"content: {content}")                
+                            
                         except json.JSONDecodeError:
                             logger.info(f"Not JSON: {data}")
                         except Exception as e:
@@ -732,7 +757,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
             containers['notification'][index].markdown(result)
     
         logger.info(f"result: {result}")
-        return result
+        return result, image_url
         
     except Exception as e:
         error_msg = f"Unexpected error: {str(e)}"
