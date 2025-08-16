@@ -658,17 +658,17 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     tool = data_json['tool']
                                     input = data_json['input']
                                     toolUseId = data_json['toolUseId']
-                                    logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
+                                    # logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
                                     if toolUseId not in tool_info_list: # new tool info
                                         index += 1
                                         current = ""
-                                        logger.info(f"new tool info: {toolUseId} -> {index}")
+                                        # logger.info(f"new tool info: {toolUseId} -> {index}")
                                         tool_info_list[toolUseId] = index      
                                         tool_name_list[toolUseId] = tool                                  
                                         add_notification(containers, f"Tool: {tool}, Input: {input}")
                                     else: # overwrite tool info
-                                        logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
+                                        # logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
                                         containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
                                     
                                 elif 'toolResult' in data_json:

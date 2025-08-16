@@ -480,7 +480,8 @@ export class CdkAgentcoreStack extends cdk.Stack {
         'eks:ListUpdates',
         'eks:DescribeUpdate',
         'eks:ListFargateProfiles',        
-        'ce:*'
+        'ce:*',
+        'elasticfilesystem:DescribeFileSystems'
       ]
     }));
 
