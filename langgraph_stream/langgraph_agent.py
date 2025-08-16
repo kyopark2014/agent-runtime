@@ -317,7 +317,7 @@ def get_tool_info(tool_name, tool_content):
                     for url in path:
                         urls.append(url)
                 else:
-                    urls.append(path)            
+                    urls.append(path)
 
             if isinstance(json_data, dict):
                 for item in json_data:
@@ -364,34 +364,33 @@ async def call_model(state: State, config):
     
     image_url = state['image_url'] if 'image_url' in state else []
 
-    containers = config.get("configurable", {}).get("containers", None)    
     tools = config.get("configurable", {}).get("tools", None)
     system_prompt = config.get("configurable", {}).get("system_prompt", None)
     
-    if isinstance(last_message, ToolMessage):
-        tool_name = last_message.name
-        tool_content = last_message.content
-        logger.info(f"tool_name: {tool_name}, content: {tool_content}")
+    # if isinstance(last_message, ToolMessage):
+    #     tool_name = last_message.name
+    #     tool_content = last_message.content
+    #     logger.info(f"tool_name: {tool_name}, content: {tool_content}")
 
-        global references
-        content, urls, refs = get_tool_info(tool_name, tool_content)
-        if refs:
-            for r in refs:
-                references.append(r)
-            logger.info(f"refs: {refs}")
-        if urls:
-            for url in urls:
-                image_url.append(url)
-            logger.info(f"urls: {urls}")
+    #     global references
+    #     content, urls, refs = get_tool_info(tool_name, tool_content)
+    #     if refs:
+    #         for r in refs:
+    #             references.append(r)
+    #         logger.info(f"refs: {refs}")
+    #     if urls:
+    #         for url in urls:
+    #             image_url.append(url)
+    #         logger.info(f"urls: {urls}")
 
-        if content:  # manupulate the output of tool message
-            messages = state["messages"]
-            messages[-1] = ToolMessage(
-                name=tool_name,
-                tool_call_id=last_message.tool_call_id,
-                content=content
-            )
-            state["messages"] = messages
+    #     if content:  # manupulate the output of tool message
+    #         messages = state["messages"]
+    #         messages[-1] = ToolMessage(
+    #             name=tool_name,
+    #             tool_call_id=last_message.tool_call_id,
+    #             content=content
+    #         )
+    #         state["messages"] = messages
 
     if system_prompt:
         system = system_prompt
@@ -441,8 +440,6 @@ async def should_continue(state: State, config) -> Literal["continue", "end"]:
 
     messages = state["messages"]    
     last_message = messages[-1]
-
-    containers = config.get("configurable", {}).get("containers", None)
     
     if isinstance(last_message, AIMessage) and last_message.tool_calls:
         tool_name = last_message.tool_calls[-1]['name']

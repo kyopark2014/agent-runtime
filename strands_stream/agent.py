@@ -98,13 +98,13 @@ async def agentcore_strands(payload):
 
             elif "current_tool_use" in event:
                 current_tool_use = event["current_tool_use"]
-                logger.info(f"current_tool_use: {current_tool_use}")
+                #logger.info(f"current_tool_use: {current_tool_use}")
                 name = current_tool_use.get("name", "")
                 input = current_tool_use.get("input", "")
                 toolUseId = current_tool_use.get("toolUseId", "")
 
                 text = f"name: {name}, input: {input}"
-                logger.info(f"[current_tool_use] {text}")
+                #logger.info(f"[current_tool_use] {text}")
                 stream = {'tool': name, 'input': input, 'toolUseId': toolUseId}
             
             elif "message" in event:

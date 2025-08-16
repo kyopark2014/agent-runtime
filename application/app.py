@@ -52,12 +52,12 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", 
-            "aws document", "use_aws", "repl coder","agentcore coder", "knowledge base",     
-            "perplexity", "wikipedia", "agentcore-browser",
+            "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
+            "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
+            "repl coder","agentcore coder","knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
             "filesystem", "terminal", "text editor", "context7", "puppeteer", 
-            "playwright", "airbnb",  
-            "pubmed", "chembl", "clinicaltrial", "arxiv"  # "ArXiv" "firecrawl" "obsidian"
+            "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
+            "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
         ]
         mcp_selections = {}
         default_selections = ["basic", "use_aws", "tavily-search", "filesystem", "terminal"]
@@ -214,11 +214,10 @@ if prompt := st.chat_input("메시지를 입력하세요."):
                     "result": st.empty()
                 } 
                 if platform == 'AgentCore':
-                    response = agentcore_client.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
+                    response, image_url = agentcore_client.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
                 else:                    
-                    response = agentcore_client.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
+                    response, image_url = agentcore_client.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
 
-            image_url = []
             st.session_state.messages.append({
                 "role": "assistant", 
                 "content": response,
