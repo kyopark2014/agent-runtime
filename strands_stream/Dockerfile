@@ -74,6 +74,9 @@ RUN pip install Pillow colorama
 # Additional utilities
 RUN pip install requests uuid playwright nova-act
 
+# OpenTelemetry
+RUN pip install aws-opentelemetry-distro>=0.10.0
+
 COPY . .
 
 # Add the current directory to Python path
@@ -81,4 +84,4 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8080
 
-CMD ["uv", "run", "uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["uv", "run", "opentelemetry-instrument", "uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "8080"]
