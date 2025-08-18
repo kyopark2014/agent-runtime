@@ -82,6 +82,15 @@ COPY . .
 # Add the current directory to Python path
 ENV PYTHONPATH=/app
 
+# OpenTelemetry environment variables (values passed at build time)
+ARG OTEL_TRACES_SAMPLER=always_off
+ARG OTEL_METRICS_EXPORTER=none
+ARG OTEL_LOGS_EXPORTER=none
+
+ENV OTEL_TRACES_SAMPLER=${OTEL_TRACES_SAMPLER}
+ENV OTEL_METRICS_EXPORTER=${OTEL_METRICS_EXPORTER}
+ENV OTEL_LOGS_EXPORTER=${OTEL_LOGS_EXPORTER}
+
 EXPOSE 8080
 
 CMD ["uv", "run", "opentelemetry-instrument", "uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "8080"]

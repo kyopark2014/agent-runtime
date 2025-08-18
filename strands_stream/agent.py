@@ -1,6 +1,7 @@
 import logging
 import sys
 import strands_agent
+import agentcore_memory
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -40,31 +41,31 @@ async def agentcore_strands(payload):
     tool_list = []
 
     # # initate memory variables
-    # memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(chat.user_id)
-    # logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
+    memory_id, actor_id, session_id, namespace = agentcore_memory.load_memory_variables(user_id)
+    logger.info(f"memory_id: {memory_id}, actor_id: {actor_id}, session_id: {session_id}, namespace: {namespace}")
 
-    # if memory_id is None:
-    #     # retrieve memory id
-    #     memory_id = agentcore_memory.retrieve_memory_id()
-    #     logger.info(f"memory_id: {memory_id}")        
+    if memory_id is None:
+        # retrieve memory id
+        memory_id = agentcore_memory.retrieve_memory_id()
+        logger.info(f"memory_id: {memory_id}")        
         
-    #     # create memory if not exists
-    #     if memory_id is None:
-    #         logger.info(f"Memory will be created...")
-    #         memory_id = agentcore_memory.create_memory(namespace)
-    #         logger.info(f"Memory was created... {memory_id}")
+        # create memory if not exists
+        if memory_id is None:
+            logger.info(f"Memory will be created...")
+            memory_id = agentcore_memory.create_memory(namespace)
+            logger.info(f"Memory was created... {memory_id}")
         
-    #     # create strategy if not exists
-    #     agentcore_memory.create_strategy_if_not_exists(
-    #         memory_id=memory_id, namespace=namespace, strategy_name=chat.user_id)
+        # create strategy if not exists
+        agentcore_memory.create_strategy_if_not_exists(
+            memory_id=memory_id, namespace=namespace, strategy_name=user_id)
 
-    #     # save memory variables
-    #     agentcore_memory.update_memory_variables(
-    #         user_id=chat.user_id, 
-    #         memory_id=memory_id, 
-    #         actor_id=actor_id, 
-    #         session_id=session_id, 
-    #         namespace=namespace)
+        # save memory variables
+        agentcore_memory.update_memory_variables(
+            user_id=user_id, 
+            memory_id=memory_id, 
+            actor_id=actor_id, 
+            session_id=session_id, 
+            namespace=namespace)
     
     # initiate agent
     await strands_agent.initiate_agent(
@@ -131,8 +132,8 @@ async def agentcore_strands(payload):
             yield (stream)
     
     # save event to memory
-    # if memory_id is not None and result:
-    #     agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
+    if memory_id is not None and result:
+        agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
 
 if __name__ == "__main__":
     app.run()
