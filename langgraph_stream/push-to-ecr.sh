@@ -55,9 +55,9 @@ echo "===== AWS ECR Login ====="
 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
 echo "===== Building Docker Image ====="
-docker build --build-arg OTEL_TRACES_SAMPLER=always_off \
-             --build-arg OTEL_METRICS_EXPORTER=none \
-             --build-arg OTEL_LOGS_EXPORTER=none \
+docker build --build-arg OTEL_TRACES_SAMPLER=always_on \
+             --build-arg OTEL_METRICS_EXPORTER=otlp \
+             --build-arg OTEL_LOGS_EXPORTER=otlp \
              -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
 
 echo "===== Tagging for ECR Repository ====="
