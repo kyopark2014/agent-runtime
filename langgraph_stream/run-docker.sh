@@ -30,6 +30,9 @@ echo "🧹 Cleaning up existing container..."
 sudo docker stop ${DOCKER_NAME}-container 2>/dev/null || true
 sudo docker rm ${DOCKER_NAME}-container 2>/dev/null || true
 
+# Disable OpenTelemetry for local development
+echo "🔍 OpenTelemetry disabled for local development"
+
 # Run Docker container
 echo ""
 echo "🚀 Starting Docker container..."

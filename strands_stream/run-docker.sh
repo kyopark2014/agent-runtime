@@ -30,6 +30,9 @@ echo "🧹 Cleaning up existing container..."
 sudo docker stop ${DOCKER_NAME}-container 2>/dev/null || true
 sudo docker rm ${DOCKER_NAME}-container 2>/dev/null || true
 
+# Disable OpenTelemetry for local development
+echo "🔍 OpenTelemetry disabled for local development"
+
 # Run Docker container
 echo ""
 echo "🚀 Starting Docker container..."
@@ -37,6 +40,9 @@ sudo docker run -d \
     --platform linux/amd64 \
     --name ${DOCKER_NAME}-container \
     -p 8080:8080 \
+    -e OTEL_TRACES_SAMPLER=always_off \
+    -e OTEL_METRICS_EXPORTER=none \
+    -e OTEL_LOGS_EXPORTER=none \
     ${DOCKER_NAME}:latest
 
 if [ $? -eq 0 ]; then
