@@ -74,7 +74,7 @@ async def agentcore_strands(payload):
         mcp_servers=mcp_servers, 
         historyMode='Disable'
     )
-    logger.info(f"tool_list: {tool_list}")    
+    # logger.info(f"tool_list: {tool_list}")    
 
     # run agent    
     with strands_agent.mcp_manager.get_active_clients(mcp_servers) as _:

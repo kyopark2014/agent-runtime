@@ -70,10 +70,10 @@ async def agent_langgraph(payload):
             namespace=namespace)
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
-    logger.info(f"mcp_json: {mcp_json}")        
+    # logger.info(f"mcp_json: {mcp_json}")        
 
     server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
-    logger.info(f"server_params: {server_params}")    
+    # logger.info(f"server_params: {server_params}")    
 
     client = MultiServerMCPClient(server_params)
     tools = await client.get_tools()
