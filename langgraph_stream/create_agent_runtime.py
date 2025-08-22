@@ -60,7 +60,7 @@ if len(agentRuntimes) > 0:
             break
 
 def update_agentcore_json(agentRuntimeArn):
-    fname = 'agentcore.json'        
+    fname = 'config.json'        
     try:
         with open(fname, 'r') as f:
             config = json.load(f)        

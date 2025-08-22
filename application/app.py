@@ -60,7 +60,7 @@ with st.sidebar:
             "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["basic", "use_aws", "tavily-search", "filesystem", "terminal"]
+        default_selections = ["basic", "use_aws", "tavily-search", "terminal"]
 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns

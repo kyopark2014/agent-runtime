@@ -62,19 +62,19 @@ def update_tool_notification(containers, tool_index, message):
 def load_agentcore_config():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     
-    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph_stream', "agentcore.json")
+    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph_stream', "config.json")
     with open(langgraph_arn_path, "r", encoding="utf-8") as f:
         langgraph_data = json.load(f)
         langgraph_agent_runtime_arn = langgraph_data['agent_runtime_arn']
         logger.info(f"langgraph_agent_runtime_arn: {langgraph_agent_runtime_arn}")
     
-    strands_arn_path = os.path.join(script_dir, "..", 'strands_stream', "agentcore.json")
+    strands_arn_path = os.path.join(script_dir, "..", 'strands_stream', "config.json")
     with open(strands_arn_path, "r", encoding="utf-8") as f:
         strands_data = json.load(f)
         strands_agent_runtime_arn = strands_data['agent_runtime_arn']
         logger.info(f"strands_agent_runtime_arn: {strands_agent_runtime_arn}")
     
-    return langgraph_agent_runtime_arn, strands_agent_runtime_arn, 
+    return langgraph_agent_runtime_arn, strands_agent_runtime_arn
 
 langgraph_agent_runtime_arn, strands_agent_runtime_arn = load_agentcore_config()
 
