@@ -2,7 +2,7 @@
 
 여기에서는 AgentCore를 이용해 LangGraph, Strands에서 MCP를 활용하는 Agent를 Production 환경에 배포하고 안전하게 사용하는 방법에 대해 설명합니다.
 
-## 주요 구현
+## 주요 구현 
 
 ### 전체 Architecture
 
