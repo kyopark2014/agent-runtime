@@ -511,7 +511,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         if content:
                                             logger.info(f"content: {content}")    
 
-                                else: # langgraph
+                                elif(agent_type == 'langgraph'): # langgraph
                                     if 'data' in data_json:
                                         text = data_json['data']
                                         logger.info(f"[data] {text}")
@@ -560,6 +560,45 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
 
                                         if content:
                                             logger.info(f"content: {content}")     
+
+                                else: # claude
+                                    if 'TextBlock' in data_json:
+                                        TextBlock = data_json['TextBlock']
+                                        logger.info(f"TextBlock: {TextBlock}")
+                                        update_streaming_result(containers, TextBlock)
+
+                                        result = TextBlock
+
+                                    elif 'tools' in data_json:
+                                        tools = data_json['tools']
+                                        logger.info(f"[tools] {tools}")
+                                        add_notification(containers, f"Tools: {tools}")
+
+                                    elif 'ToolUseBlock' in data_json:
+                                        ToolUseBlock = data_json['ToolUseBlock']
+                                        input = data_json['input']
+                                        logger.info(f"tool: {ToolUseBlock}, input: {input}")
+                                        add_notification(containers, f"Tool: {ToolUseBlock}, Input: {input}")
+                                        
+                                    elif 'ToolResultBlock' in data_json:
+                                        ToolResultBlock = data_json['ToolResultBlock']
+                                        logger.info(f"ToolResult: {ToolResultBlock}")
+
+                                        logger.info(f"tool result: {ToolResultBlock}")                                    
+                                        add_notification(containers, f"Tool Result: {str(ToolResultBlock)}")
+
+                                        content, urls, refs = get_tool_info(tool_name, ToolResultBlock)
+                                        if refs:
+                                            for r in refs:
+                                                references.append(r)
+                                            logger.info(f"refs: {refs}")
+                                        if urls:
+                                            for url in urls:
+                                                image_url.append(url)
+                                            logger.info(f"urls: {urls}")
+
+                                        if content:
+                                            logger.info(f"content: {content}")    
 
                             except json.JSONDecodeError:
                                 logger.info(f"Not JSON: {data}")

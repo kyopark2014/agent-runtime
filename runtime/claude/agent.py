@@ -30,6 +30,7 @@ logger = logging.getLogger("agent")
 app = BedrockAgentCoreApp()
 
 session_id = None
+tool_name = dict()
 
 @app.entrypoint
 async def agent_claude(payload):    
@@ -122,19 +123,25 @@ async def agent_claude(payload):
                     yield({'TextBlock': block.text})
                     
                 elif isinstance(block, ToolUseBlock):
-                    logger.info(f"--> tool_use_id: {block.id=}, name: {block.name}, input: {block.input}")
+                    logger.info(f"--> tool_use_id: {block.id}, name: {block.name}, input: {block.input}")
                     yield({'ToolUseBlock': block.name, 'input': block.input})
+                    tool_name[block.id] = block.name
+
                 elif isinstance(block, ToolResultBlock):
-                    logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
-                    yield({'ToolResultBlock': block.content})
+                    logger.info(f"--> tool_use_id: {block.tool_use_id}, content: {block.content}")
+                    logger.info(f"--> tool_name: {tool_name[block.tool_use_id]}")
+
+                    yield({'ToolName': tool_name[block.tool_use_id], 'ToolResultBlock': block.content})
                 else:
                     logger.info(f"AssistantMessage: {block}")
                 
         elif isinstance(message, UserMessage):
             for block in message.content:
                 if isinstance(block, ToolResultBlock):
-                    logger.info(f"--> tool_use_id: {block.tool_use_id=}, content: {block.content}")
-                    yield({'ToolResultBlock': block.content})
+                    logger.info(f"--> tool_use_id: {block.tool_use_id}, content: {block.content}")
+                    logger.info(f"--> tool_name: {tool_name[block.tool_use_id]}")
+
+                    yield({'ToolName': tool_name[block.tool_use_id], 'ToolResultBlock': block.content})
                     
                     if isinstance(block.content, list):
                         for item in block.content:
