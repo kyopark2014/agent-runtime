@@ -44,21 +44,6 @@ client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
 response = client.list_agent_runtimes()
 print(f"response: {response}")
 
-isExist = False
-agentRuntimeId = None
-agentRuntimes = response['agentRuntimes']
-targetAgentRuntime = repositoryName
-if len(agentRuntimes) > 0:
-    for agentRuntime in agentRuntimes:
-        agentRuntimeName = agentRuntime['agentRuntimeName']
-        print(f"agentRuntimeName: {agentRuntimeName}")
-        if agentRuntimeName == targetAgentRuntime:
-            print(f"agentRuntimeName: {agentRuntimeName} is already exists")
-            agentRuntimeId = agentRuntime['agentRuntimeId']
-            print(f"agentRuntimeId: {agentRuntimeId}")
-            isExist = True        
-            break
-
 def update_agentcore_json(agentRuntimeArn):
     fname = 'config.json'        
     try:
@@ -129,10 +114,29 @@ def update_agent_runtime():
     print(f"agentRuntimeArn: {agentRuntimeArn}")
     update_agentcore_json(agentRuntimeArn)
 
-print(f"isExist: {isExist}")
-if isExist:
-    print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-    update_agent_runtime()
-else:
-    print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-    create_agent_runtime()
+def main():
+    isExist = False
+    agentRuntimeId = None
+    agentRuntimes = response['agentRuntimes']
+    targetAgentRuntime = repositoryName
+    if len(agentRuntimes) > 0:
+        for agentRuntime in agentRuntimes:
+            agentRuntimeName = agentRuntime['agentRuntimeName']
+            print(f"agentRuntimeName: {agentRuntimeName}")
+            if agentRuntimeName == targetAgentRuntime:
+                print(f"agentRuntimeName: {agentRuntimeName} is already exists")
+                agentRuntimeId = agentRuntime['agentRuntimeId']
+                print(f"agentRuntimeId: {agentRuntimeId}")
+                isExist = True        
+                break
+
+    print(f"isExist: {isExist}")
+    if isExist:
+        print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
+        update_agent_runtime()
+    else:
+        print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
+        create_agent_runtime()
+
+if __name__ == "__main__":
+    main()

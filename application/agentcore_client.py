@@ -22,10 +22,6 @@ bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
 
-sharing_url = config["sharing_url"] if "sharing_url" in config else None
-s3_prefix = "docs"
-capture_prefix = "captures"
-
 streaming_index = None
 index = 0
 def add_notification(containers, message):
@@ -49,24 +45,20 @@ def update_tool_notification(containers, tool_index, message):
     if containers is not None:
         containers['notification'][tool_index].info(message)
 
-def load_agentcore_config():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    langgraph_arn_path = os.path.join(script_dir, "..", 'langgraph_stream', "config.json")
-    with open(langgraph_arn_path, "r", encoding="utf-8") as f:
-        langgraph_data = json.load(f)
-        langgraph_agent_runtime_arn = langgraph_data['agent_runtime_arn']
-        logger.info(f"langgraph_agent_runtime_arn: {langgraph_agent_runtime_arn}")
-    
-    strands_arn_path = os.path.join(script_dir, "..", 'strands_stream', "config.json")
-    with open(strands_arn_path, "r", encoding="utf-8") as f:
-        strands_data = json.load(f)
-        strands_agent_runtime_arn = strands_data['agent_runtime_arn']
-        logger.info(f"strands_agent_runtime_arn: {strands_agent_runtime_arn}")
-    
-    return langgraph_agent_runtime_arn, strands_agent_runtime_arn
+def load_agentcore_config(agent_name):
+    # agentcore의 runtime의 리스트를 조회하여 runtime의 이름이 agent_name과 같으면 agent arn을 리턴    
+    client = boto3.client('bedrock-agentcore-control', region_name=bedrock_region)
+    response = client.list_agent_runtimes()
+    print(f"response: {response}")
 
-langgraph_agent_runtime_arn, strands_agent_runtime_arn = load_agentcore_config()
+    agentRuntimes = response['agentRuntimes']
+    for agentRuntime in agentRuntimes:
+        if agentRuntime['agentRuntimeName'] == agent_name:
+            return agentRuntime['agentRuntimeArn']
+    return None
+
+agent_runtime_arn = load_agentcore_config("strands")
+print(f"agent_runtime_arn: {agent_runtime_arn}")
 
 runtime_session_id = str(uuid.uuid4())
 logger.info(f"runtime_session_id: {runtime_session_id}")
@@ -190,11 +182,11 @@ def get_tool_info(tool_name, tool_content):
                                 # logger.info(f"uri (list): {uri}")
                                 ext = uri.split(".")[-1]
 
-                                # if ext is an image 
-                                url = sharing_url + "/" + s3_prefix + "/" + uri.split("/")[-1]
-                                if ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "ico", "webp"]:
-                                    url = sharing_url + "/" + capture_prefix + "/" + uri.split("/")[-1]
-                                logger.info(f"url: {url}")
+                                # # if ext is an image 
+                                # url = sharing_url + "/" + s3_prefix + "/" + uri.split("/")[-1]
+                                # if ext in ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "ico", "webp"]:
+                                #     url = sharing_url + "/" + capture_prefix + "/" + uri.split("/")[-1]
+                                # logger.info(f"url: {url}")
                                 
                                 tool_references.append({
                                     "url": url, 
@@ -596,14 +588,16 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
         "history_mode": history_mode
     })
 
-    if agent_type == 'langgraph':
-        agent_runtime_arn = langgraph_agent_runtime_arn
-    else: 
-        agent_runtime_arn = strands_agent_runtime_arn
+    agent_runtime_arn = load_agentcore_config(agent_type)
+    print(f"agent_runtime_arn: {agent_runtime_arn}")
 
     logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
     logger.info(f"Payload: {payload}")
     
+    if agent_runtime_arn is None:
+        logger.error(f"agent_runtime_arn is not found")
+        return f"Error: agent_runtime_arn is not found", []
+
     try:
         agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
         response = agent_core_client.invoke_agent_runtime(
