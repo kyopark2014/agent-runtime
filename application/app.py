@@ -51,12 +51,9 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "kb-retriever", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
-            "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
-            "repl coder","agentcore coder","knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
-            "filesystem", "terminal", "text editor", "context7", "puppeteer", 
-            "agentcore-browser", "playwright", "firecrawl", "obsidian", "airbnb", 
-            "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
+            "kb-retriever", "tavily-search", "aws document", "use_aws", 
+            "agentcore coder", "terminal", "agentcore-browser", "playwright", 
+            "사용자 설정"
         ]
         mcp_selections = {}
         default_selections = ["kb-retriever", "aws document"]
@@ -115,7 +112,7 @@ with st.sidebar:
     )   
 
     agent_type = st.radio(
-        label="Agent 타입을 선택하세요. ",options=["langgraph", "strands"], index=0
+        label="Agent 타입을 선택하세요. ",options=["langgraph", "strands", "claude"], index=0
     )
     
     st.success(f"Connected to {modelName}", icon="💚")

@@ -80,13 +80,13 @@ async def agentcore_strands(payload):
     with strands_agent.mcp_manager.get_active_clients(mcp_servers) as _:
         agent_stream = strands_agent.agent.stream_async(query)
 
-        stream = ""
+        final_output = ""
         async for event in agent_stream:
             text = ""            
             if "data" in event:
                 text = event["data"]
                 logger.info(f"[data] {text}")
-                stream = {'data': text}
+                yield({'data': text})
 
             elif "result" in event:
                 final = event["result"]                
@@ -96,8 +96,7 @@ async def agentcore_strands(payload):
                     text = content[0].get("text", "")
                     logger.info(f"[result] {text}")
                 
-                    result = {"messages": [text], "image_url": []}
-                    stream = {'result': result}
+                    final_output = {"messages": text, "image_url": []}
 
             elif "current_tool_use" in event:
                 current_tool_use = event["current_tool_use"]
@@ -107,8 +106,9 @@ async def agentcore_strands(payload):
                 toolUseId = current_tool_use.get("toolUseId", "")
 
                 text = f"name: {name}, input: {input}"
-                #logger.info(f"[current_tool_use] {text}")
-                stream = {'tool': name, 'input': input, 'toolUseId': toolUseId}
+                logger.info(f"[current_tool_use] {text}")
+
+                yield({'tool': name, 'input': input, 'toolUseId': toolUseId})
             
             elif "message" in event:
                 message = event["message"]
@@ -123,7 +123,8 @@ async def agentcore_strands(payload):
                         toolContent = toolResult["content"]
                         toolResult = toolContent[0].get("text", "")
                         logger.info(f"[toolResult] {toolResult}, [toolUseId] {toolUseId}")
-                        stream = {'toolResult': toolResult, 'toolUseId': toolUseId}
+                        
+                        yield({'toolResult': toolResult, 'toolUseId': toolUseId})
             
             elif "contentBlockDelta" or "contentBlockStop" or "messageStop" or "metadata" in event:
                 pass
@@ -131,13 +132,11 @@ async def agentcore_strands(payload):
             else:
                 logger.info(f"event: {event}")
 
-            yield({'result': stream})
-    
     # # save event to memory
     # if memory_id is not None and result:
     #     agentcore_memory.save_conversation_to_memory(memory_id, actor_id, session_id, query, result) 
 
-    yield({'result': stream})
+    yield({'result': final_output})
 
 if __name__ == "__main__":
     app.run()

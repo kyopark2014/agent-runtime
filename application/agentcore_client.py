@@ -458,8 +458,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         final_output = data_json['result']
                                         logger.info(f"[result] {final_output}")
 
-                                        messages = final_output.get('messages', [])
-                                        result = messages[-1].get('content')
+                                        result = final_output.get('messages', [])
                                         logger.info(f"result: {result}")
 
                                         if "image_url" in final_output:
