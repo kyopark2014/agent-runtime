@@ -5,6 +5,7 @@ import logging
 import sys
 import requests
 import uuid
+import utils
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -15,18 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("agentcore_client")
 
-def load_config():
-    config = None
-    
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "..", 'langgraph_stream', "config.json")
-    
-    with open(config_path, "r", encoding="utf-8") as f:
-        config = json.load(f)
-
-    return config
-
-config = load_config()
+config = utils.load_config()
 
 bedrock_region = config['region']
 accountId = config['accountId']

@@ -3,7 +3,6 @@ import chat
 import logging
 import sys
 import os
-import knowledge_base as kb
 import agentcore_client
 
 logging.basicConfig(
@@ -52,7 +51,7 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "basic", "short-term memory", "long-term memory", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
+            "kb-retriever", "tavily-search", "aws-api", "aws-knowledge", "aws document", "aws cost", "aws cli", 
             "use_aws", "aws cloudwatch", "aws storage", "image generation", "aws diagram",
             "repl coder","agentcore coder","knowledge base", "tavily", "perplexity", "ArXiv", "wikipedia", 
             "filesystem", "terminal", "text editor", "context7", "puppeteer", 
@@ -60,7 +59,7 @@ with st.sidebar:
             "pubmed", "chembl", "clinicaltrial", "arxiv-manual", "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["basic", "use_aws", "tavily-search", "terminal"]
+        default_selections = ["kb-retriever", "aws document"]
 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
@@ -136,32 +135,6 @@ if clear_button or "messages" not in st.session_state:
     
     st.session_state.greetings = False
     st.rerun()  
-
-file_name = ""
-state_of_code_interpreter = False
-if uploaded_file is not None and clear_button==False:
-    logger.info(f"uploaded_file.name: {uploaded_file.name}")
-    if uploaded_file.name:
-        status = '선택한 파일을 업로드합니다.'
-        logger.info(f"status: {status}")
-        st.info(status)
-
-        file_name = uploaded_file.name
-        logger.info(f"uploading... file_name: {file_name}")
-        file_url = chat.upload_to_s3(uploaded_file.getvalue(), file_name)
-        logger.info(f"file_url: {file_url}")
-
-        kb.sync_data_source()  # sync uploaded files
-            
-        status = f'선택한 "{file_name}"의 내용을 요약합니다.'
-        logger.info(f"status: {status}")
-        st.info(status)
-    
-        msg = chat.get_summary_of_uploaded_file(file_name, st)
-        st.session_state.messages.append({"role": "assistant", "content": f"선택한 문서({file_name})를 요약하면 아래와 같습니다.\n\n{msg}"})    
-        logger.info(f"msg: {msg}")
-
-        st.write(msg)        
 
 # Initialize chat history
 if "messages" not in st.session_state:
