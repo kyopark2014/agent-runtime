@@ -1,0 +1,6 @@
+{
+  "projectName": "agentcore",
+  "region": "us-west-2",
+  "accountId": "262976740991",
+  "agent_runtime_role": "arn:aws:iam::262976740991:role/AmazonBedrockAgentCoreRuntimeRoleForagentcore"
+}

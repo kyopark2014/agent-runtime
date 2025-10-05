@@ -27,6 +27,8 @@ logger.info(f"workingDir: {workingDir}")
 
 mcp_user_config = {}    
 
+bearer_token = None
+
 def get_cognito_config(cognito_config):    
     user_pool_name = cognito_config.get('user_pool_name')
     user_pool_id = cognito_config.get('user_pool_id')
@@ -214,7 +216,6 @@ def save_bearer_token(secret_name, bearer_token):
         # Continue execution even if saving fails
 
 def retrieve_bearer_token(secret_name):
-    secret_name = config['secret_name']
     bearer_token = get_bearer_token_from_secret_manager(secret_name)
     logger.info(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
 
@@ -238,7 +239,6 @@ def retrieve_bearer_token(secret_name):
         logger.info(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
         
         if bearer_token:
-            secret_name = config['secret_name']
             save_bearer_token(secret_name, bearer_token)
         else:
             logger.info("Failed to get bearer token from Cognito. Exiting.")
@@ -251,24 +251,8 @@ def load_config(mcp_type):
 
     if mcp_type == "aws document":
         mcp_type = 'aws_documentation'
-    elif mcp_type == "repl coder":
-        mcp_type = 'repl_coder'
-    elif mcp_type == "agentcore coder":
-        mcp_type = 'agentcore_coder'
 
-    if mcp_type == "use-aws":
-        return {
-            "mcpServers": {
-                "use-aws": {
-                    "command": "python",
-                    "args": [
-                        f"{workingDir}/mcp_server_use_aws.py"
-                    ]
-                }
-            }
-        }
-    
-    elif mcp_type == "kb-retriever":   # use agentcore runtime mcp
+    if mcp_type == "kb-retriever":   # use agentcore runtime mcp
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
@@ -306,32 +290,11 @@ def load_config(mcp_type):
             }
         }
         
-    elif mcp_type == "repl_coder":
-        return {
-            "mcpServers": {
-                "repl_coder": {
-                    "command": "python",
-                    "args": [
-                        f"{workingDir}/mcp_server_repl_coder.py"
-                    ]
-                }
-            }
-        }    
-    
-    elif mcp_type == "tavily-search":
-        return {
-            "mcpServers": {
-                "tavily-search": {
-                    "command": "python",
-                    "args": [
-                        f"{workingDir}/mcp_server_tavily.py"
-                    ]
-                }
-            }
-        }
-        
     elif mcp_type == "사용자 설정":
         return mcp_user_config
+    
+    else:
+        return {"mcpServers": {}}
 
 def load_selected_config(mcp_servers: dict):
     logger.info(f"mcp_servers: {mcp_servers}")

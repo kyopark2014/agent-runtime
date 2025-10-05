@@ -13,8 +13,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("chat")
 
-map_chain = dict() 
-
 config = utils.load_config()
 print(f"config: {config}")
 

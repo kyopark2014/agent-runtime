@@ -47,8 +47,20 @@ RUN echo "[default]" > /root/.aws/config && \
     echo "region = ${AWS_DEFAULT_REGION:-us-west-2}" >> /root/.aws/config && \
     echo "output = json" >> /root/.aws/config && \
     chmod 600 /root/.aws/config
- 
+
+# Create non-root user for running the application
+RUN groupadd -r appuser && useradd -r -g appuser -m appuser
+
+# Create app directory and set ownership
 WORKDIR /app
+RUN chown -R appuser:appuser /app
+
+# Create necessary directories for appuser and set permissions
+RUN mkdir -p /home/appuser/.cache/uv && \
+    mkdir -p /home/appuser/.local && \
+    chown -R appuser:appuser /home/appuser
+
+RUN npm install -g @anthropic-ai/claude-code
 
 # Core dependencies - Install boto3/botocore first with exact versions
 RUN pip install boto3 botocore --upgrade 
@@ -62,8 +74,22 @@ RUN pip install aws-opentelemetry-distro>=0.10.0
 
 COPY . .
 
+# Set ownership of copied files to appuser
+RUN chown -R appuser:appuser /app
+
+# Create AWS credentials directory for appuser
+RUN mkdir -p /home/appuser/.aws && \
+    cp /root/.aws/credentials /home/appuser/.aws/ 2>/dev/null || true && \
+    cp /root/.aws/config /home/appuser/.aws/ 2>/dev/null || true && \
+    chown -R appuser:appuser /home/appuser/.aws && \
+    chmod 600 /home/appuser/.aws/credentials 2>/dev/null || true && \
+    chmod 600 /home/appuser/.aws/config 2>/dev/null || true
+
 # Add the current directory to Python path
 ENV PYTHONPATH=/app
+
+# Switch to non-root user
+USER appuser
 
 EXPOSE 8080
 

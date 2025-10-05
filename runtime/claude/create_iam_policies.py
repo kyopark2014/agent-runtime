@@ -1,58 +1,48 @@
 import boto3
 import json
 import os
-from datetime import datetime
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.json")
 
 def load_config():
-    config = None    
-
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)    
         return config
-    except FileNotFoundError:
-        print(f"Configuration file not found: {config_path}")
-        return {}
     except Exception as e:
         print(f"Error loading config: {e}")
-        return {}
+        config = {}
+
+        config['projectName'] = "agentcore"
+
+        session = boto3.Session()
+        bedrock_region = session.region_name
+        config['region'] = bedrock_region
+
+        sts = boto3.client("sts")
+        accountId = sts.get_caller_identity()["Account"]
+        config['accountId'] = accountId
+
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+        return config
 
 config = load_config()
 
-region = config.get('region')
-accountId = config.get('accountId')
-if accountId is None:
-    session = boto3.Session()
-    region = session.region_name
-    
-    # Get account ID using STS client
-    sts_client = session.client('sts')
-    accountId = sts_client.get_caller_identity()['Account']
-
-    config['region'] = region
-    config['accountId'] = accountId
-    with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-
+region = config['region']
+accountId = config['accountId']
 projectName = config.get('projectName')
-if not projectName:
-    projectName = input("Enter project name: ")
-    config['projectName'] = projectName
-    with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
-        
-agent_runtime_role_name = "BedrockAgentCoreMCPRole"+"For"+projectName
+
+agent_runtime_policy_name = "AmazonBedrockAgentCoreRuntimePolicy"+"For"+projectName
 
 def create_bedrock_agentcore_policy():
-    """Create IAM policy for Bedrock AgentCore MCP access"""
+    """Create IAM policy for Bedrock AgentCore access"""
     
-    policy_name = agent_runtime_role_name
-    policy_description = f"Policy for accessing Bedrock AgentCore MCP endpoints"
+    policy_name = agent_runtime_policy_name
+    policy_description = f"Policy for accessing Bedrock AgentCore Runtime endpoints"
     
-    # Comprehensive policy document for Bedrock AgentCore MCP access
+    # Comprehensive policy document for Bedrock AgentCore access
     policy_document = {
         "Version": "2012-10-17",
         "Statement": [
@@ -270,7 +260,7 @@ def create_trust_policy_for_bedrock():
 def create_bedrock_agentcore_role():
     """Create IAM role for Bedrock AgentCore MCP access"""
     
-    role_name = "BedrockAgentCoreMCPRole"+"For"+projectName
+    role_name = "AmazonBedrockAgentCoreRuntimeRole"+"For"+projectName
     policy_arn = create_bedrock_agentcore_policy()
     
     if not policy_arn:

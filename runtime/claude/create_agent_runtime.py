@@ -15,9 +15,6 @@ def load_config():
 
 config = load_config()
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
-config_path = os.path.join(script_dir, "config.json")
-
 aws_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
@@ -27,7 +24,7 @@ current_folder_name = os.path.basename(os.path.dirname(os.path.abspath(__file__)
 target = current_folder_name.split('/')[-1]
 print(f"target: {target}")
 
-repositoryName = (projectName+'_'+target).lower()
+repositoryName = projectName.replace('-', '_')+'_'+target
 print(f"repositoryName: {repositoryName}")
 
 # get lagtest image
@@ -44,6 +41,8 @@ imageTags = latestImage['imageTags'][0]
 print(f"imageTags: {imageTags}")
 
 client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
+response = client.list_agent_runtimes()
+print(f"response: {response}")
 
 def update_agentcore_json(agentRuntimeArn):
     fname = 'config.json'        
@@ -72,7 +71,7 @@ def create_agent_runtime(targetAgentRuntime):
     print(f"Trying to create agent: {runtime_name}")
 
     # create agent runtime
-    agentRuntimeArn = ""
+    agentRuntimeArn = None
     try:        
         response = client.create_agent_runtime(
             agentRuntimeName=runtime_name,
@@ -82,16 +81,7 @@ def create_agent_runtime(targetAgentRuntime):
                 }
             },
             networkConfiguration={"networkMode":"PUBLIC"}, 
-            roleArn=agent_runtime_role,
-            protocolConfiguration={"serverProtocol":"MCP"},
-            authorizerConfiguration={
-                "customJWTAuthorizer": {
-                    "allowedClients": [
-                        config['cognito']['client_id']
-                    ],
-                    "discoveryUrl": config['cognito']['discovery_url']
-                }
-            }
+            roleArn=agent_runtime_role
         )
         print(f"response of create agent runtime: {response}")
 
@@ -102,47 +92,33 @@ def create_agent_runtime(targetAgentRuntime):
         print(f"[ERROR] ConflictException: {e}")
 
     update_agentcore_json(agentRuntimeArn)
-    return agentRuntimeArn
 
-def update_agent_runtime(agentRuntimeId):
+def update_agent_runtime(targetAgentRuntime, agentRuntimeId):
+    print(f"update agent runtime: {targetAgentRuntime}")
+
     response = client.update_agent_runtime(
         agentRuntimeId=agentRuntimeId,
         description="Update agent runtime",
         agentRuntimeArtifact={
             'containerConfiguration': {
-                'containerUri': f"{accountId}.dkr.ecr.{aws_region}.amazonaws.com/{repositoryName}:{imageTags}"
+                'containerUri': f"{accountId}.dkr.ecr.{aws_region}.amazonaws.com/{targetAgentRuntime}:{imageTags}"
             }
         },
         roleArn=agent_runtime_role,
         networkConfiguration={"networkMode":"PUBLIC"},
-        protocolConfiguration={"serverProtocol":"MCP"},
-        authorizerConfiguration={
-            "customJWTAuthorizer": {
-                "allowedClients": [
-                    config['cognito']['client_id']
-                ],
-                "discoveryUrl": config['cognito']['discovery_url']
-            }
-        }
+        protocolConfiguration={"serverProtocol":"HTTP"}
     )
     print(f"response: {response}")
 
     agentRuntimeArn = response['agentRuntimeArn']
     print(f"agentRuntimeArn: {agentRuntimeArn}")
     update_agentcore_json(agentRuntimeArn)
-    return agentRuntimeArn
 
 def main():
-    targetAgentRuntime = projectName.lower().replace('-', '_')+'_'+target.lower().replace('-', '_')
-    print(f"targetAgentRuntime: {targetAgentRuntime}")
-
-    client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
-    response = client.list_agent_runtimes()
-    print(f"response: {response}")
-
     isExist = False
     agentRuntimeId = None
-    agentRuntimes = response['agentRuntimes']    
+    agentRuntimes = response['agentRuntimes']
+    targetAgentRuntime = repositoryName
     if len(agentRuntimes) > 0:
         for agentRuntime in agentRuntimes:
             agentRuntimeName = agentRuntime['agentRuntimeName']
@@ -151,26 +127,16 @@ def main():
                 print(f"agentRuntimeName: {agentRuntimeName} is already exists")
                 agentRuntimeId = agentRuntime['agentRuntimeId']
                 print(f"agentRuntimeId: {agentRuntimeId}")
-                agentRuntimeArn = agentRuntime['agentRuntimeArn']
-                print(f"agentRuntimeArn: {agentRuntimeArn}")
-                config['agent_runtime_arn'] = agentRuntimeArn
                 isExist = True        
                 break
-    print(f"isExist: {isExist}")
 
+    print(f"isExist: {isExist}")
     if isExist:
         print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-        agentRuntimeArn = update_agent_runtime(agentRuntimeId)
+        update_agent_runtime(targetAgentRuntime, agentRuntimeId)
     else:
         print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-        agentRuntimeArn = create_agent_runtime(targetAgentRuntime)
-
-    print(f"agentRuntimeArn: {agentRuntimeArn}")
-    config['agent_runtime_arn'] = agentRuntimeArn           
-
-    # update config
-    with open(config_path, 'w', encoding='utf-8') as f:
-        json.dump(config, f, ensure_ascii=False, indent=4) 
+        create_agent_runtime(targetAgentRuntime)
 
 if __name__ == "__main__":
     main()

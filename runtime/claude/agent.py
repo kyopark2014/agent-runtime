@@ -29,14 +29,18 @@ logger = logging.getLogger("agent")
 
 app = BedrockAgentCoreApp()
 
+session_id = None
+
 @app.entrypoint
-async def agent_claude(payload):
+async def agent_claude(payload):    
     """
     Invoke the agent with a payload
     """
+    global session_id
+
     logger.info(f"payload: {payload}")
-    query = payload.get("prompt")
-    logger.info(f"query: {query}")
+    prompt = payload.get("prompt")
+    logger.info(f"prompt: {prompt}")
 
     mcp_servers = payload.get("mcp_servers", [])
     logger.info(f"mcp_servers: {mcp_servers}")
@@ -92,7 +96,7 @@ async def agent_claude(payload):
         ) 
     
     final_result = ""    
-    async for message in query(prompt=query, options=options):
+    async for message in query(prompt=prompt, options=options):
         # logger.info(message)
         if isinstance(message, SystemMessage):
             logger.info(f"SystemMessage: {message}")
