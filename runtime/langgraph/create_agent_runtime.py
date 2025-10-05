@@ -65,7 +65,7 @@ def update_agentcore_json(agentRuntimeArn):
         pass
 
 # Check for duplicate Agent Runtime name
-def create_agent_runtime():
+def create_agent_runtime(targetAgentRuntime):
     runtime_name = targetAgentRuntime
     print(f"create agent runtime!")    
     print(f"Trying to create agent: {runtime_name}")
@@ -93,7 +93,7 @@ def create_agent_runtime():
 
     update_agentcore_json(agentRuntimeArn)
 
-def update_agent_runtime():
+def update_agent_runtime(targetAgentRuntime, agentRuntimeId):
     print(f"update agent runtime: {targetAgentRuntime}")
 
     response = client.update_agent_runtime(
@@ -133,10 +133,10 @@ def main():
     print(f"isExist: {isExist}")
     if isExist:
         print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-        update_agent_runtime()
+        update_agent_runtime(targetAgentRuntime, agentRuntimeId)
     else:
         print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-        create_agent_runtime()
+        create_agent_runtime(targetAgentRuntime)
 
 if __name__ == "__main__":
     main()
