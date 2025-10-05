@@ -17,7 +17,6 @@ from langchain_core.messages import HumanMessage
 from urllib import parse
 from langchain_aws import ChatBedrock
 from botocore.config import Config
-from langchain.docstore.document import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
