@@ -4,6 +4,7 @@ import chat
 import mcp_config
 import claude_agent
 import json
+import uuid
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -29,7 +30,7 @@ logger = logging.getLogger("agent")
 
 app = BedrockAgentCoreApp()
 
-session_id = None
+session_id = uuid.uuid4().hex
 tool_name = dict()
 
 @app.entrypoint
@@ -82,7 +83,7 @@ async def agent_claude(payload):
         options = ClaudeAgentOptions(
             system_prompt=system,
             max_turns=100,
-            permission_mode="bypassPermissions",
+            permission_mode="acceptEdits",  # "default", "acceptEdits", "plan", "bypassPermissions"
             model=claude_agent.get_model_id(),
             mcp_servers=server_params,
             resume=session_id
@@ -91,7 +92,7 @@ async def agent_claude(payload):
        options = ClaudeAgentOptions(
             system_prompt=system,
             max_turns=100,
-            permission_mode="bypassPermissions",
+            permission_mode="acceptEdits",
             model=claude_agent.get_model_id(),
             mcp_servers=server_params
         ) 

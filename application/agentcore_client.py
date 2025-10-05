@@ -667,6 +667,8 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
         if "text/event-stream" in response.get("contentType", ""):
             for line in response["response"].iter_lines(chunk_size=10):
                 line = line.decode("utf-8")
+                if line:
+                    print(f"-> {line}")
                 
                 if line.startswith('data: '):
                     data = line[6:].strip()  # Remove "data:" prefix and whitespace
