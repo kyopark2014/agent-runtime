@@ -83,7 +83,7 @@ async def agent_claude(payload):
         options = ClaudeAgentOptions(
             system_prompt=system,
             max_turns=100,
-            permission_mode="acceptEdits",  # "default", "acceptEdits", "plan", "bypassPermissions"
+            permission_mode="plan",  # "default", "acceptEdits", "plan", "bypassPermissions"
             model=claude_agent.get_model_id(),
             mcp_servers=server_params,
             resume=session_id
@@ -92,7 +92,7 @@ async def agent_claude(payload):
        options = ClaudeAgentOptions(
             system_prompt=system,
             max_turns=100,
-            permission_mode="acceptEdits",
+            permission_mode="plan",
             model=claude_agent.get_model_id(),
             mcp_servers=server_params
         ) 
