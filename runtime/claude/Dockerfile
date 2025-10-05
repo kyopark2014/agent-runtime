@@ -28,31 +28,25 @@ ARG AWS_SECRET_ACCESS_KEY
 ARG AWS_DEFAULT_REGION
 ARG AWS_SESSION_TOKEN
 
-# Create non-root user
-RUN adduser --disabled-password --gecos '' appuser
-
-# Create AWS credentials directory and files for appuser
-RUN mkdir -p /home/appuser/.aws
+# Create AWS credentials directory and files
+RUN mkdir -p /root/.aws
 
 # Create credentials file from build args
 RUN if [ ! -z "$AWS_ACCESS_KEY_ID" ] && [ ! -z "$AWS_SECRET_ACCESS_KEY" ]; then \
-        echo "[default]" > /home/appuser/.aws/credentials && \
-        echo "aws_access_key_id = $AWS_ACCESS_KEY_ID" >> /home/appuser/.aws/credentials && \
-        echo "aws_secret_access_key = $AWS_SECRET_ACCESS_KEY" >> /home/appuser/.aws/credentials && \
+        echo "[default]" > /root/.aws/credentials && \
+        echo "aws_access_key_id = $AWS_ACCESS_KEY_ID" >> /root/.aws/credentials && \
+        echo "aws_secret_access_key = $AWS_SECRET_ACCESS_KEY" >> /root/.aws/credentials && \
         if [ ! -z "$AWS_SESSION_TOKEN" ]; then \
-            echo "aws_session_token = $AWS_SESSION_TOKEN" >> /home/appuser/.aws/credentials; \
+            echo "aws_session_token = $AWS_SESSION_TOKEN" >> /root/.aws/credentials; \
         fi && \
-        chmod 600 /home/appuser/.aws/credentials; \
+        chmod 600 /root/.aws/credentials; \
     fi
 
 # Create config file
-RUN echo "[default]" > /home/appuser/.aws/config && \
-    echo "region = ${AWS_DEFAULT_REGION:-us-west-2}" >> /home/appuser/.aws/config && \
-    echo "output = json" >> /home/appuser/.aws/config && \
-    chmod 600 /home/appuser/.aws/config
-
-# Set ownership of AWS directory
-RUN chown -R appuser:appuser /home/appuser/.aws
+RUN echo "[default]" > /root/.aws/config && \
+    echo "region = ${AWS_DEFAULT_REGION:-us-west-2}" >> /root/.aws/config && \
+    echo "output = json" >> /root/.aws/config && \
+    chmod 600 /root/.aws/config
 
 # Create app directory and set ownership
 WORKDIR /app
@@ -68,12 +62,6 @@ RUN pip install requests uuid
 RUN pip install aws-opentelemetry-distro>=0.10.0
 
 COPY . .
-
-# Set ownership of app directory to appuser
-RUN chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
 
 EXPOSE 8080
 
