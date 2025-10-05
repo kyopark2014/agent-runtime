@@ -86,11 +86,15 @@ RUN mkdir -p /home/appuser/.aws && \
 # Add the current directory to Python path
 ENV PYTHONPATH=/app
 
-# Switch to non-root user
+# Switch to non-root user first
 USER appuser
 
-# Install Claude Code as appuser
-RUN npm install -g @anthropic-ai/claude-code --unsafe-perm=true --allow-root
+# Install Claude Code as non-root user using local installation
+RUN npm install @anthropic-ai/claude-code
+
+# Set NODE_PATH to include local node_modules
+ENV NODE_PATH=/home/appuser/node_modules
+ENV PATH=/home/appuser/node_modules/.bin:$PATH
 
 EXPOSE 8080
 
