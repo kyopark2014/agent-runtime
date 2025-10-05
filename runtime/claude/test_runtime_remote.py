@@ -46,7 +46,7 @@ async def main():
     runtime_session_id = str(uuid.uuid4())
     print(f"runtime_session_id: {runtime_session_id}")
 
-    prompt = "보일러 에러 코드?"
+    prompt = "kb-retriever로 보일러 에러 코드에 대해 조사하세요."
     mcp_servers = ["kb-retriever"]
     model_name = "Claude 3.7 Sonnet"
     user_id = target
