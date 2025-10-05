@@ -652,10 +652,9 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     final_output = data_json['result']
                                     logger.info(f"[result] {final_output}")
 
-                                    messages = final_output.get('messages', [])
-                                    result = messages[-1].get('content')
+                                    result = final_output.get('messages', [])
                                     logger.info(f"result: {result}")
-                                    
+
                                     if "image_url" in final_output:
                                         image_url = final_output.get('image_url', [])
                                         logger.info(f"image_url: {image_url}")                
