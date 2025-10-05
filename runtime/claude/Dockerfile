@@ -60,8 +60,6 @@ RUN mkdir -p /home/appuser/.cache/uv && \
     mkdir -p /home/appuser/.local && \
     chown -R appuser:appuser /home/appuser
 
-RUN npm install -g @anthropic-ai/claude-code
-
 # Core dependencies - Install boto3/botocore first with exact versions
 RUN pip install boto3 botocore --upgrade 
 RUN pip install claude-agent-sdk anyio
@@ -90,6 +88,9 @@ ENV PYTHONPATH=/app
 
 # Switch to non-root user
 USER appuser
+
+# Install Claude Code as appuser
+RUN npm install -g @anthropic-ai/claude-code --unsafe-perm=true --allow-root
 
 EXPOSE 8080
 

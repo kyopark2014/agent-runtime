@@ -1,6 +1,7 @@
 {
-  "projectName": "agentcore",
-  "region": "us-west-2",
-  "accountId": "262976740991",
-  "agent_runtime_role": "arn:aws:iam::262976740991:role/AmazonBedrockAgentCoreRuntimeRoleForagentcore"
+    "projectName": "agentcore",
+    "region": "us-west-2",
+    "accountId": "262976740991",
+    "agent_runtime_role": "arn:aws:iam::262976740991:role/AmazonBedrockAgentCoreRuntimeRoleForagentcore",
+    "agent_runtime_arn": "arn:aws:bedrock-agentcore:us-west-2:262976740991:runtime/agentcore_claude-FW3R5NBWP9"
 }

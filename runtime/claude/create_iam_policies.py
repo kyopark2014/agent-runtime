@@ -62,10 +62,13 @@ def create_bedrock_agentcore_policy():
                 "Action": [
                     "secretsmanager:GetSecretValue",
                     "secretsmanager:DescribeSecret",
-                    "secretsmanager:UpdateSecret"
+                    "secretsmanager:UpdateSecret",
+                    "secretsmanager:CreateSecret",
+                    "secretsmanager:PutSecretValue"
                 ],
                 "Resource": [
-                    f"arn:aws:secretsmanager:{region}:*:secret:{projectName}/cognito/credentials*"
+                    f"arn:aws:secretsmanager:{region}:*:secret:{projectName}/cognito/credentials*",
+                    f"arn:aws:secretsmanager:{region}:*:secret:{projectName}/credentials*"
                 ]
             },
             {
