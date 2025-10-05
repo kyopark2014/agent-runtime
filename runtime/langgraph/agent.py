@@ -122,7 +122,7 @@ async def agent_langgraph(payload):
                         yield({'data': message.content})
 
                         tool_calls = message.tool_calls
-                        logger.info(f"tool_calls: {tool_calls}")
+                        # logger.info(f"tool_calls: {tool_calls}")
 
                         if tool_calls:
                             for tool_call in tool_calls:
@@ -149,7 +149,7 @@ async def agent_langgraph(payload):
     #     result = "답변을 찾지 못하였습니다."        
     # logger.info(f"result: {result}")
 
-    yield({'result': result})
+    yield({'result': final_output})
 
 if __name__ == "__main__":
     app.run()

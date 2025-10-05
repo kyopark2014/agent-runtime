@@ -46,19 +46,15 @@ def update_tool_notification(containers, tool_index, message):
         containers['notification'][tool_index].info(message)
 
 def load_agentcore_config(agent_name):
-    # agentcore의 runtime의 리스트를 조회하여 runtime의 이름이 agent_name과 같으면 agent arn을 리턴    
     client = boto3.client('bedrock-agentcore-control', region_name=bedrock_region)
     response = client.list_agent_runtimes()
-    print(f"response: {response}")
+    logger.info(f"response: {response}")
 
     agentRuntimes = response['agentRuntimes']
     for agentRuntime in agentRuntimes:
         if agentRuntime['agentRuntimeName'] == agent_name:
             return agentRuntime['agentRuntimeArn']
     return None
-
-agent_runtime_arn = load_agentcore_config("strands")
-print(f"agent_runtime_arn: {agent_runtime_arn}")
 
 runtime_session_id = str(uuid.uuid4())
 logger.info(f"runtime_session_id: {runtime_session_id}")
@@ -459,8 +455,17 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         current += text
                                         update_streaming_result(containers, current)
                                     elif 'result' in data_json:
-                                        result = data_json['result']
-                                        logger.info(f"[result] {result}")
+                                        final_output = data_json['result']
+                                        logger.info(f"[result] {final_output}")
+
+                                        messages = final_output.get('messages', [])
+                                        result = messages[-1].get('content')
+                                        logger.info(f"result: {result}")
+
+                                        if "image_url" in final_output:
+                                            image_url = final_output.get('image_url', [])
+                                            logger.info(f"image_url: {image_url}")                                        
+                                        
                                     elif 'tool' in data_json:
                                         tool = data_json['tool']
                                         input = data_json['input']
@@ -513,8 +518,17 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         logger.info(f"[data] {text}")
                                         update_streaming_result(containers, text)
                                     elif 'result' in data_json:
-                                        result = data_json['result']
-                                        logger.info(f"[result] {result}")
+                                        final_output = data_json['result']
+                                        logger.info(f"[result] {final_output}")
+
+                                        messages = final_output.get('messages', [])
+                                        result = messages[-1].get('content')
+                                        logger.info(f"result: {result}")
+                                        
+                                        if "image_url" in final_output:
+                                            image_url = final_output.get('image_url', [])
+                                            logger.info(f"image_url: {image_url}")                
+
                                     elif 'tool' in data_json:
                                         tool = data_json['tool']
                                         input = data_json['input']
@@ -588,7 +602,8 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
         "history_mode": history_mode
     })
 
-    agent_runtime_arn = load_agentcore_config(agent_type)
+    runtime_name = projectName.replace('-', '_')+'_'+agent_type
+    agent_runtime_arn = load_agentcore_config(runtime_name)
     print(f"agent_runtime_arn: {agent_runtime_arn}")
 
     logger.info(f"agent_runtime_arn: {agent_runtime_arn}")
@@ -635,8 +650,16 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     update_streaming_result(containers, current)
 
                                 elif 'result' in data_json:
-                                    result = data_json['result']
-                                    logger.info(f"[result] {result}")
+                                    final_output = data_json['result']
+                                    logger.info(f"[result] {final_output}")
+
+                                    messages = final_output.get('messages', [])
+                                    result = messages[-1].get('content')
+                                    logger.info(f"result: {result}")
+                                    
+                                    if "image_url" in final_output:
+                                        image_url = final_output.get('image_url', [])
+                                        logger.info(f"image_url: {image_url}")                
 
                                 elif 'tool' in data_json:
                                     tool = data_json['tool']
@@ -690,8 +713,17 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     logger.info(f"[data] {text}")
                                     update_streaming_result(containers, text)
                                 elif 'result' in data_json:
-                                    result = data_json['result']
-                                    logger.info(f"[result] {result}")
+                                    final_output = data_json['result']
+                                    logger.info(f"[result] {final_output}")
+
+                                    messages = final_output.get('messages', [])
+                                    result = messages[-1].get('content')
+                                    logger.info(f"result: {result}")
+
+                                    if "image_url" in final_output:
+                                        image_url = final_output.get('image_url', [])
+                                        logger.info(f"image_url: {image_url}")                                        
+
                                 elif 'tool' in data_json:
                                     tool = data_json['tool']
                                     input = data_json['input']
