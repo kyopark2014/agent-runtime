@@ -51,28 +51,10 @@ RUN echo "[default]" > /root/.aws/config && \
 WORKDIR /app
 
 # Core dependencies
-RUN pip install --upgrade "boto3==1.39.12" "botocore==1.39.12"
-RUN pip install langchain_aws langchain langchain_community langchain_experimental
-RUN pip install bedrock-agentcore
-RUN pip install mcp==1.12.1 langchain-mcp-adapters==0.1.9
-RUN pip install strands-agents==1.0.1 strands-agents-tools
+RUN pip install boto3 botocore --upgrade
+RUN pip install mcp
+RUN pip install strands-agents strands-agents-tools
 RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv
-
-# AWS and search dependencies
-RUN pip install opensearch-py
-RUN pip install tavily-python==0.5.0
-
-# Data processing and analysis
-RUN pip install yfinance==0.2.52 pytz==2024.2 beautifulsoup4==4.12.3
-
-# PDF and document processing
-RUN pip install PyPDF2 reportlab
-
-# Image processing
-RUN pip install Pillow colorama
-
-# Additional utilities
-RUN pip install requests uuid playwright nova-act
 
 # OpenTelemetry
 RUN pip install aws-opentelemetry-distro>=0.10.0

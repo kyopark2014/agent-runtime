@@ -98,8 +98,7 @@ async def agent_langgraph(payload):
         "messages": [HumanMessage(content=query)]
     }
             
-    value = result = None
-    final_output = None
+    value = final_output = None
     async for output in app.astream(inputs, config):
         for key, value in output.items():
             logger.info(f"--> key: {key}, value: {value}")

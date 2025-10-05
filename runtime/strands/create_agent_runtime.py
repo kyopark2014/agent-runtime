@@ -2,8 +2,6 @@ import boto3
 import json
 import os
 
-from bedrock_agentcore.memory import MemoryClient
-
 def load_config():
     config = None
     
@@ -46,23 +44,8 @@ client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
 response = client.list_agent_runtimes()
 print(f"response: {response}")
 
-isExist = False
-agentRuntimeId = None
-agentRuntimes = response['agentRuntimes']
-targetAgentRuntime = repositoryName
-if len(agentRuntimes) > 0:
-    for agentRuntime in agentRuntimes:
-        agentRuntimeName = agentRuntime['agentRuntimeName']
-        print(f"agentRuntimeName: {agentRuntimeName}")
-        if agentRuntimeName == targetAgentRuntime:
-            print(f"agentRuntimeName: {agentRuntimeName} is already exists")
-            agentRuntimeId = agentRuntime['agentRuntimeId']
-            print(f"agentRuntimeId: {agentRuntimeId}")
-            isExist = True        
-            break
-
 def update_agentcore_json(agentRuntimeArn):
-    fname = 'agentcore.json'        
+    fname = 'config.json'        
     try:
         with open(fname, 'r') as f:
             config = json.load(f)        
@@ -82,7 +65,7 @@ def update_agentcore_json(agentRuntimeArn):
         pass
 
 # Check for duplicate Agent Runtime name
-def create_agent_runtime():
+def create_agent_runtime(targetAgentRuntime):
     runtime_name = targetAgentRuntime
     print(f"create agent runtime!")    
     print(f"Trying to create agent: {runtime_name}")
@@ -90,7 +73,6 @@ def create_agent_runtime():
     # create agent runtime
     agentRuntimeArn = None
     try:        
-        # create agent runtime
         response = client.create_agent_runtime(
             agentRuntimeName=runtime_name,
             agentRuntimeArtifact={
@@ -111,7 +93,7 @@ def create_agent_runtime():
 
     update_agentcore_json(agentRuntimeArn)
 
-def update_agent_runtime():
+def update_agent_runtime(targetAgentRuntime, agentRuntimeId):
     print(f"update agent runtime: {targetAgentRuntime}")
 
     response = client.update_agent_runtime(
@@ -132,10 +114,29 @@ def update_agent_runtime():
     print(f"agentRuntimeArn: {agentRuntimeArn}")
     update_agentcore_json(agentRuntimeArn)
 
-print(f"isExist: {isExist}")
-if isExist:
-    print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-    update_agent_runtime()
-else:
-    print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
-    create_agent_runtime()
+def main():
+    isExist = False
+    agentRuntimeId = None
+    agentRuntimes = response['agentRuntimes']
+    targetAgentRuntime = repositoryName
+    if len(agentRuntimes) > 0:
+        for agentRuntime in agentRuntimes:
+            agentRuntimeName = agentRuntime['agentRuntimeName']
+            print(f"agentRuntimeName: {agentRuntimeName}")
+            if agentRuntimeName == targetAgentRuntime:
+                print(f"agentRuntimeName: {agentRuntimeName} is already exists")
+                agentRuntimeId = agentRuntime['agentRuntimeId']
+                print(f"agentRuntimeId: {agentRuntimeId}")
+                isExist = True        
+                break
+
+    print(f"isExist: {isExist}")
+    if isExist:
+        print(f"update agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
+        update_agent_runtime(targetAgentRuntime, agentRuntimeId)
+    else:
+        print(f"create agent runtime: {targetAgentRuntime}, imageTags: {imageTags}")
+        create_agent_runtime(targetAgentRuntime)
+
+if __name__ == "__main__":
+    main()
