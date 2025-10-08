@@ -6,7 +6,7 @@
 
 ### 전체 Architecture
 
-전체적인 Architecture는 아래와 같습니다. 여기서는 MCP를 지원하는 Strands와 LangGraph agent를 [AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)를 이용해 배포하고 streamlit 애플리케이션을 이용해 사용합니다. 개발자는 각 agent에 맞는 [Dockerfile](./langgraph/Dockerfile)을 이용하여, docker image를 생성하고 ECR에 업로드 합니다. 이후 [bedrock-agentcore-control](https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/Welcome.html)의 [create_agent_runtime.py](./langgraph/create_agent_runtime.py)을 이용해서 [AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)의 runtime으로 배포합니다. 이 작업이 끝나면 EC2와 같은 compute에 있는 streamlit에서 LangGraph와 Strands agent를 활용할 수 있습니다. 애플리케이션에서 AgentCore의 runtime을 호출할 때에는 [bedrock-agentcore](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore.html)의 [invoke_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/invoke_agent_runtime.html)을 이용합니다. 이때에 각 agent를 생성할 때에 확인할 수 있는 [agentRuntimeArn](https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_Agent.html)을 이용합니다. Agent는 [MCP](https://modelcontextprotocol.io/introduction)을 이용해 RAG, AWS Document, Tavily와 같은 검색 서비스를 활용할 수 있습니다. 여기에서는 RAG를 위하여 Lambda를 이용합니다. 데이터 저장소의 관리는 Knowledge base를 사용하고, 벡터 스토어로는 OpenSearch를 이용합니다. Agent에 필요한 S3, CloudFront, OpenSearch, Lambda등의 배포를 위해서는 AWS CDK를 이용합니다.
+전체적인 Architecture는 아래와 같습니다. 여기서는 MCP를 지원하는 Strands와 LangGraph agent를 [AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)를 이용해 배포하고 streamlit 애플리케이션을 이용해 사용합니다. 개발자는 각 agent에 맞는 [Dockerfile](./runtime/langgraph/Dockerfile)을 이용하여, docker image를 생성하고 ECR에 업로드 합니다. 이후 [bedrock-agentcore-control](https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/Welcome.html)의 [create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)을 이용해서 [AgentCore](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html)의 runtime으로 배포합니다. 이 작업이 끝나면 EC2와 같은 compute에 있는 streamlit에서 LangGraph와 Strands agent를 활용할 수 있습니다. 애플리케이션에서 AgentCore의 runtime을 호출할 때에는 [bedrock-agentcore](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore.html)의 [invoke_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/invoke_agent_runtime.html)을 이용합니다. 이때에 각 agent를 생성할 때에 확인할 수 있는 [agentRuntimeArn](https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_Agent.html)을 이용합니다. Agent는 [MCP](https://modelcontextprotocol.io/introduction)을 이용해 RAG, AWS Document, Tavily와 같은 검색 서비스를 활용할 수 있습니다. 여기에서는 RAG를 위하여 Lambda를 이용합니다. 데이터 저장소의 관리는 Knowledge base를 사용하고, 벡터 스토어로는 OpenSearch를 이용합니다. Agent에 필요한 S3, CloudFront, OpenSearch, Lambda등의 배포를 위해서는 AWS CDK를 이용합니다.
 
 <img width="862" height="428" alt="image" src="https://github.com/user-attachments/assets/e01e4c99-869d-435c-a573-9468311ada73" />
 
@@ -24,19 +24,19 @@ AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.
 
 ### AgentCore에 배포하기
 
-LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./langgraph/push-to-ecr.sh)를 이용하면 손쉽게 배포할 수 있습니다.
+LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./runtime/langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./runtime/langgraph/push-to-ecr.sh)를 이용하면 손쉽게 배포할 수 있습니다.
 
 ```text
 ./push-to-ecr.sh
 ```
 
-이후, 아래와 같이 [create_agent_runtime.py](./langgraph/create_agent_runtime.py)를 이용해 AgentCore에 runtime으로 배포합니다.
+이후, 아래와 같이 [create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)를 이용해 AgentCore에 runtime으로 배포합니다.
 
 ```text
 python create_agent_runtime.py
 ```
 
-[create_agent_runtime.py](./langgraph/create_agent_runtime.py)에서는 AgentCore에 처음으로 배포하는지 확인하여 아래와 같이 runtime을 생성합니다.
+[create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)에서는 AgentCore에 처음으로 배포하는지 확인하여 아래와 같이 runtime을 생성합니다.
 
 ```python
 response = client.create_agent_runtime(
@@ -92,7 +92,7 @@ response = client.update_agent_runtime(
 
 ### Local에서 동작 확인
 
-[build-docker.sh](./langgraph/build-docker.sh)와 [run-docker.sh](./langgraph/run-docker.sh)을 이용해 local 환경에서 docker 동작을 확인할 수 있습니다.
+[build-docker.sh](./runtime/langgraph/build-docker.sh)와 [run-docker.sh](./runtime/langgraph/run-docker.sh)을 이용해 local 환경에서 docker 동작을 확인할 수 있습니다.
 
 ```text
 ./build-docker.sh
@@ -113,13 +113,13 @@ curl -X POST http://localhost:8080/invocations \
 -d '{"prompt": "내 s3 bucket 리스트는?", "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"], "model_name": "Claude 3.7 Sonnet"}'
 ```
 
-[invoke_agent.py](./langgraph/invoke_agent.py)와 같이 코드로도 동작으로 확인할 수 있습니다.
+[invoke_agent.py](./runtime/langgraph/invoke_agent.py)와 같이 코드로도 동작으로 확인할 수 있습니다.
 
 ```text
 python invoke_agent.py
 ```
 
-[invoke_agent.py](./langgraph/invoke_agent.py)에서는 아래와 같이 [invoke_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/invoke_agent_runtime.html)을 이용하여 실행합니다.
+[invoke_agent.py](./runtime/langgraph/invoke_agent.py)에서는 아래와 같이 [invoke_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/invoke_agent_runtime.html)을 이용하여 실행합니다.
 
 ```python
 payload = json.dumps({
@@ -182,7 +182,7 @@ cd cdk-agentcore && npm install
 cdk deploy --require-approval never --all
 ```
 
-배포가 완료되면 아래와 같은 Output 파일에서 CdkAgentcoreStack.environmentforagentcore 을 복사하여 langgraph와 strands 폴더에 [config.json](./langgraph/config.json)로 업데이트 합니다.
+배포가 완료되면 아래와 같은 Output 파일에서 CdkAgentcoreStack.environmentforagentcore 을 복사하여 langgraph와 strands 폴더에 [config.json](./runtime/langgraph/config.json)로 업데이트 합니다.
 
 <img width="945" height="132" alt="image" src="https://github.com/user-attachments/assets/ce2a5a90-2306-4048-927e-5bf698691dec" />
 
