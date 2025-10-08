@@ -93,63 +93,64 @@ response = client.update_agent_runtime(
 
 ### Local에서 동작 확인
 
-[build-docker.sh](./runtime/langgraph/build-docker.sh)와 [run-docker.sh](./runtime/langgraph/run-docker.sh)을 이용해 local 환경에서 docker 동작을 확인할 수 있습니다.
+[build-docker.sh](./runtime/langgraph/build-docker.sh)를 이용해 local 환경에서 docker로 된 runtime을 빌드하고, [run-docker.sh](./runtime/langgraph/run-docker.sh)을 이용해 실행할 수 있습니다.
 
 ```text
 ./build-docker.sh
 ./run-docker.sh
 ```
 
-이후 [curl.sh](./curl.sh)과 같이 동작을 테스트 할 수 있습니다. 
+이후 [test_runtime_local.py](./runtime/langgraph/test_runtime_local.py)을 이용해 동작을 테스트 합니다.
 
 ```text
-./curl.sh
+python test_runtime_local.py
 ```
 
-[curl.sh](./curl.sh)을 이용하면 아래와 같이 local에서 테스트 할 수 있습니다. MCP server와 model 정보를 질문과 함께 제공합니다.
-
-```text
-curl -X POST http://localhost:8080/invocations \
--H "Content-Type: application/json" \
--d '{"prompt": "내 s3 bucket 리스트는?", "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"], "model_name": "Claude 3.7 Sonnet"}'
-```
-
-[invoke_agent.py](./runtime/langgraph/invoke_agent.py)와 같이 코드로도 동작으로 확인할 수 있습니다.
-
-```text
-python invoke_agent.py
-```
-
-[invoke_agent.py](./runtime/langgraph/invoke_agent.py)에서는 아래와 같이 [invoke_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore/client/invoke_agent_runtime.html)을 이용하여 실행합니다.
+[test_runtime_local.py](./runtime/langgraph/test_runtime_local.py)에서는 아래와 같이 prompt, MCP server, model 정보를 설정합니다. 이후 request를 POST로 전송한 후에 결과를 확인합니다. 
 
 ```python
-payload = json.dumps({
-    "prompt": "서울 날씨는?",
-    "mcp_servers": ["basic", "use_aws", "tavily-search", "filesystem", "terminal"],
-    "model_name": "Claude 3.7 Sonnet",
-})
-agent_core_client = boto3.client('bedrock-agentcore', region_name=region_name)
+prompt = "보일러 에러 코드?"
+mcp_servers = ["kb-retriever"]
+model_name = "Claude 3.7 Sonnet"
+user_id = uuid.uuid4().hex
+history_mode = "Disable"
 
-response = agent_core_client.invoke_agent_runtime(
-    agentRuntimeArn=agentRuntimeArn,
-    runtimeSessionId=str(uuid.uuid4()),
-    payload=payload,
-    qualifier="DEFAULT"
-)
-response_body = response['response'].read()
-response_data = json.loads(response_body)
+payload = {
+    "prompt": prompt,
+    "mcp_servers": mcp_servers,
+    "model_name": model_name,
+    "user_id": user_id,
+    "history_mode": history_mode
+}
+
+runtime_url = "http://127.0.0.1:8080/invocations"
+headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream"
+}
+
+response = requests.post(runtime_url, headers=headers, json=payload, stream=True)    
+if "text/event-stream" in response.headers.get("content-type", ""):
+    for line in response.iter_lines(chunk_size=10):
+        if line:
+            line = line.decode("utf-8")
+            print(f"-> {line}")
 ```
 
-Streamlit에서 아래와 같이 "Docker"를 선택하면, local의 docker를 테스트 할 수 있습니다.
+또한, streamlit에서 아래와 같이 "Docker"를 선택하면, local의 docker를 테스트 할 수 있습니다.
 
 <img width="195" height="95" alt="image" src="https://github.com/user-attachments/assets/f0bc2385-30d4-4486-b002-a3ff25928802" />
 
-"Docker"를 선택하면, [chat.py](./application/chat.py)와 같이 http://localhost:8080/invocations 로 요청을 보내서 응답을 확인합니다.
+"Docker"를 선택하면, [agentcore_client.py](./application/agentcore_client.py)와 같이 http://localhost:8080/invocations 로 요청을 보내서 응답을 확인합니다.
 
 ```python
 import requests
 payload = json.dumps({
-    "prompt": prompt, "mcp_servers": mcp_servers, "model_name": model_name,
+    "prompt": prompt,
+    "mcp_servers": mcp_servers,
+    "model_name": model_name,
+    "user_id": user_id,
+    "history_mode": history_mode
 })
 headers = {"Content-Type": "application/json"}   
 destination = f"http://localhost:8080/invocations"
@@ -159,38 +160,12 @@ response = requests.post(destination, headers=headers, data=payload, timeout=300
 문제 발생시 Docker 로그를 아래와 같이 확인합니다.
 
 ```text
-sudo docker logs coreagent-langgraph-container
+docker logs agentcore_langgraph-container -f
 ```
-
-### Agent 지원 서비스 설치
-
-Agent의 동작 테스트를 위해 S3, CloudFront, OpenSearch (Serverless), Bedrock Knowledge Base이 필요합니다. 이를 위한 상세 내용은 [cdk-agentcore](./cdk-agentcore/lib/cdk-agentcore-stack.ts)을 참조합니다. 이를 인프라로 배포할 때에는 아래와 같이 수행합니다.
-
-먼저, cdk-agentcore로 이동하여 CDK 환경설정을 준비합니다. 만약 한번도 bootstrapping을 하지 않았다면, [AWS CDK 부트스트래핑](https://docs.aws.amazon.com/ko_kr/cdk/v2/guide/bootstrapping.html)을 참조하여 수행합니다.
-
-- Bootstrapping
-
-여기서 account-id를 확인하여 아래의 "123456789012"을 바꾼후 실행합니다.
-
-```text
-cdk bootstrap aws://123456789012/us-west-2
-```
-
-- CDK 배포
-
-```text
-cd cdk-agentcore && npm install
-cdk deploy --require-approval never --all
-```
-
-배포가 완료되면 아래와 같은 Output 파일에서 CdkAgentcoreStack.environmentforagentcore 을 복사하여 langgraph와 strands 폴더에 [config.json](./runtime/langgraph/config.json)로 업데이트 합니다.
-
-<img width="945" height="132" alt="image" src="https://github.com/user-attachments/assets/ce2a5a90-2306-4048-927e-5bf698691dec" />
-
 
 ### 문서 동기화 하기 
 
-Knowledge Base에서 문서를 활용하기 위해서는 S3에 문서 등록 및 동기화기 필요합니다. Streamlit에서 파일을 입력하면 자동으로 동기화가 시작되지만 S3로 파일을 직접 올리는 경우에는 아래와 같이 수행합니다. [S3 Console](https://us-west-2.console.aws.amazon.com/s3/home?region=us-west-2)에 접속하여 "storage-for-agentcore-xxxxxxxxxxxx-us-west-2"를 선택하고, 아래와 같이 docs폴더를 생성한 후에 파일을 업로드 합니다. 
+Knowledge Base에서 문서를 활용하기 위해서는 S3에 문서 등록 및 동기화기 필요합니다. [S3 Console](https://us-west-2.console.aws.amazon.com/s3/home?region=us-west-2)에 접속하여 "storage-for-agentcore-xxxxxxxxxxxx-us-west-2"를 선택하고, 아래와 같이 docs폴더를 생성한 후에 파일을 업로드 합니다. 
 
 <img width="400" alt="image" src="https://github.com/user-attachments/assets/482f635e-a38d-4525-b9a3-fb1c2a9089c8" />
 
