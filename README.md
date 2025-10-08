@@ -1,6 +1,6 @@
 # AgentCore Runtime을 이용해 Agent 활용하기
 
-여기에서는 AgentCore Runtime을 이용해서 1) LangGraph, Strands SDK를 이용해 만든 agent를 배포하는 방법과 2) agent에 필요한 데이터를 수집하고 사용자의 의도에 따른 동작을 수행하는 방법을 설명합니다. AgentCore는 Agent와 MCP를 위한 production 환경으로, 비용과 운용에 용이한 서버리스 architecture를 지원합니다. 이를 통해 Agent와 MCP를 편리하게 배포하고 효과적으로 운용할 수 있습니다. 
+여기에서는 AgentCore Runtime을 이용해서 1) LangGraph, Strands SDK를 이용해 만든 agent를 배포하는 방법과 2) agent에 필요한 데이터를 수집하고 사용자의 의도에 따른 동작을 수행하는 방법을 설명합니다. AgentCore는 Agent와 MCP를 위한 서버리스 production 환경으로서 Agent와 MCP를 편리하게 배포하고 효과적으로 운용할 수 있습니다.
 
 ## 주요 구현 
 
