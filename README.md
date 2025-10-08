@@ -30,6 +30,15 @@ LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./runtime/langgra
 ./push-to-ecr.sh
 ```
 
+[push-to-ecr.sh](./runtime/langgraph/push-to-ecr.sh)에서는 아래와 같이 ECR에 login후에 push를 수행합니다.
+
+```text
+aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+docker build -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
+docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${ECR_URI}
+docker push ${ECR_URI}
+```
+
 이후, 아래와 같이 [create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)를 이용해 AgentCore에 runtime으로 배포합니다.
 
 ```text
