@@ -51,9 +51,7 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "kb-retriever", "tavily-search", "aws document", "use_aws", 
-            "agentcore coder", "terminal", "agentcore-browser", "playwright", 
-            "사용자 설정"
+            "kb-retriever", "use-aws", "aws document", "사용자 설정"
         ]
         mcp_selections = {}
         default_selections = ["kb-retriever", "aws document"]

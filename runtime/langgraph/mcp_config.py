@@ -75,7 +75,7 @@ def get_cognito_config(cognito_config):
 
 def get_agent_runtime_arn(mcp_type: str):
     #logger.info(f"mcp_type: {mcp_type}")
-    agent_runtime_name = f"mcp_{mcp_type.replace('-', '_')}"
+    agent_runtime_name = f"{projectName.lower().replace('-', '_')}_{mcp_type.replace('-', '_')}"
     logger.info(f"agent_runtime_name: {agent_runtime_name}")
     client = boto3.client('bedrock-agentcore-control', region_name=region)
     response = client.list_agent_runtimes(
@@ -249,6 +249,8 @@ def retrieve_bearer_token(secret_name):
 def load_config(mcp_type):
     global bearer_token, gateway_url
 
+    secret_name = 'agentcore/credentials' # use prebuilt secret
+
     if mcp_type == "aws document":
         mcp_type = 'aws_documentation'
 
@@ -256,8 +258,6 @@ def load_config(mcp_type):
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
-
-        secret_name = 'agentcore/credentials' # use prebuilt secret
 
         if not bearer_token:
             bearer_token = retrieve_bearer_token(secret_name)
@@ -276,6 +276,29 @@ def load_config(mcp_type):
                 }
             }
         }
+
+    elif mcp_type == "use-aws":
+        agent_arn = get_agent_runtime_arn(mcp_type)
+        logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
+        encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
+
+        if not bearer_token:
+            bearer_token = retrieve_bearer_token(secret_name)
+            logger.info(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
+
+        return {
+            "mcpServers": {
+                "use_aws": {
+                    "type": "streamable_http",
+                    "url": f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT",
+                    "headers": {
+                        "Authorization": f"Bearer {bearer_token}",
+                        "Content-Type": "application/json",
+                        "Accept": "application/json, text/event-stream"
+                    }
+                }
+            }
+        }    
     
     elif mcp_type == "aws_documentation":
         return {
