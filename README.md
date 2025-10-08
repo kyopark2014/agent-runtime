@@ -62,7 +62,7 @@ response = client.create_agent_runtime(
 agentRuntimeArn = response['agentRuntimeArn']
 ```
 
-기존에 runtime이 있는지는 아래와 같이 [list_agent_runtimes](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/list_agent_runtimes.html)을 이용해 확인합니다. 
+Runtime agent를 생성하기 전에 기존 runtime이 있는지는 아래와 같이 [list_agent_runtimes](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/list_agent_runtimes.html)을 이용해 확인할 수 있습니다.
 
 ```python
 client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
