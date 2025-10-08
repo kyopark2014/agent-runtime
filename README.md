@@ -36,7 +36,7 @@ LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./runtime/langgra
 python create_agent_runtime.py
 ```
 
-[create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)에서는 AgentCore에 처음으로 배포하는지 확인하여 아래와 같이 runtime을 생성합니다.
+[create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)에서는 AgentCore에 처음으로 배포하는지 확인하여 아래와 같이 runtime을 생성합니다. 여기서 networkMode는 PUBLIC/VPC를 선택할 수 있어서 필요시 agent를 특정 VPC 접속으로 제한할 수 있고, Security Group을 이용하여 사내로 접속을 제한할 수 있습니다. 또한, protocolConfiguration은 HTTP, MCP, A2A를 선택하여 필요한 용도에 맞게 사용할 수 있습니다. 인증은 기본이 IAM이며, 필요시 authorizerConfiguration을 이용해 JWT를 사용할 수 있습니다.
 
 ```python
 response = client.create_agent_runtime(
@@ -46,7 +46,8 @@ response = client.create_agent_runtime(
             'containerUri': f"{accountId}.dkr.ecr.{aws_region}.amazonaws.com/{repositoryName}:{imageTags}"
         }
     },
-    networkConfiguration={"networkMode":"PUBLIC"}, 
+    networkConfiguration={"networkMode":"PUBLIC"},
+    protocolConfiguration={"serverProtocol":"HTTP"}
     roleArn=agent_runtime_role
 )
 agentRuntimeArn = response['agentRuntimeArn']
