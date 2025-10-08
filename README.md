@@ -22,7 +22,9 @@ AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.
 - AgentCore Gateway: API, Lambda를 비롯한 서비스들을 쉽게 Tool로 활용할 수 있습니다.
 - AgentCore Observability: 상용 환경에서 개발자가 agent의 동작을 trace, debug, monitor 할 수 있습니다.
 
-### AgentCore에 배포하기
+## Runtime Agent
+
+### AgentCore Runtime으로 Agnet 배포하기
 
 LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./runtime/langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./runtime/langgraph/push-to-ecr.sh)를 이용하면 손쉽게 배포할 수 있습니다.
 
@@ -98,15 +100,41 @@ response = client.update_agent_runtime(
 )
 ```
 
-## 배포 및 실행하기
-
 ### Local에서 동작 확인
 
-[build-docker.sh](./runtime/langgraph/build-docker.sh)를 이용해 local 환경에서 docker로 된 runtime을 빌드하고, [run-docker.sh](./runtime/langgraph/run-docker.sh)을 이용해 실행할 수 있습니다.
+Agent를 AgentCore에 배포하기 전에 local 환경에서 충분히 동작을 테스트하면 개발 소요시간을 단축할 수 있습니다. [build-docker.sh](./runtime/langgraph/build-docker.sh)를 이용해 local 환경에서 docker로 된 runtime을 빌드합니다. 
 
 ```text
 ./build-docker.sh
+```
+
+[build-docker.sh](./runtime/langgraph/build-docker.sh)에서는 config.json에서 환경 값을 읽은 후에 아래와 같이 docker를 빌드합니다. docker에서 AWS CLI를 사용하기 위해 AWS Credential을 환경값으로 주고 있습니다.
+
+```text
+sudo docker build \
+    --platform linux/arm64 \
+    --build-arg AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
+    --build-arg AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
+    --build-arg AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
+    --build-arg AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
+    -t ${DOCKER_NAME}:latest .
+```
+
+[run-docker.sh](./runtime/langgraph/run-docker.sh)을 이용해 실행할 수 있습니다.
+
+```text
 ./run-docker.sh
+```
+
+Runtime agent의 경우에 [run-docker.sh](./runtime/langgraph/run-docker.sh)와 같이 8080으로 expose를 합니다.
+
+```text
+docker run -d \
+    --name ${DOCKER_NAME}-container \
+    -p 8080:8080 \
+    --entrypoint="" \
+    ${DOCKER_NAME}:latest \
+    uv run uvicorn agent:app --host 0.0.0.0 --port 8080
 ```
 
 이후 [test_runtime_local.py](./runtime/langgraph/test_runtime_local.py)을 이용해 동작을 테스트 합니다.
@@ -172,7 +200,102 @@ response = requests.post(destination, headers=headers, data=payload, timeout=300
 docker logs agentcore_langgraph-container -f
 ```
 
-### 문서 동기화 하기 
+### Runtime MCP
+
+[kb-retrieve](./runtime/kb-retriever/mcp_server_retrieve.py) MCP server는 RAG를 위해 Knowledge Base를 활용합니다. 여기서는 비용면에서 유용한 S3 Vector를 이용해 Knowledge base의 데이터 소스를 생성합니다.
+
+S3 Vector를 생성할 때에는 [s3vector.py](./runtime/kb-retriever/s3vector.py)와 같이 embedding 모델을 지정하고 S3 bucket을 이용해 동기화하도록 설정합니다. 
+
+```python
+response = bedrock_agent.create_knowledge_base(
+    name=knowledge_base_name,
+    description=f"Knowledge base for {projectName} using s3 vector",
+    roleArn=role_arn,
+    knowledgeBaseConfiguration={
+        "type": "VECTOR",
+        "vectorKnowledgeBaseConfiguration": {
+            "embeddingModelArn": embeddingModelArn, 
+            "embeddingModelConfiguration": {
+                "bedrockEmbeddingModelConfiguration": {
+                    "dimensions": 1024,
+                    "embeddingDataType": "FLOAT32"
+                }
+            },
+            "supplementalDataStorageConfiguration": {
+                "storageLocations": [
+                    {
+                        "s3Location": {
+                            "uri": f"s3://{bucket_name}"
+                        },
+                        "type": "S3"
+                    }
+                ]
+            }
+        }
+    },
+    storageConfiguration={
+        "type": "S3_VECTORS",
+        "s3VectorsConfiguration": {
+            "vectorBucketArn": s3_vector_bucket_arn,
+            "indexArn": s3_vector_index_arn
+        }
+    }
+)
+```
+
+이를 배포할 때에는 아래와 같이 수행합니다.
+
+1. [create_iam_policies.py](./runtime/kb-retriever/create_iam_policies.py)를 이용해 필요한 권한을 생성합니다.
+
+```text
+python create_iam_policies.py
+```
+
+2. MCP 접속에 활용할 congnito를 설정하고 생성된 token을 secret manager에 등록합니다.
+
+```text
+python create_bearer_token.py
+```
+
+3. Docker image를 생성하여 ECR에 푸쉬합니다.
+
+```text
+./build-docker.sh
+```
+
+4. AgentCore에 MCP server를 생성합니다.
+
+```text
+python create_mcp_runtime.py
+```
+
+만약 local에서 배포 결과를 확인하고 싶다면, [test_mcp_remote.py](./runtime/kb-retriever/test_mcp_remote.py)를 이용해 테스트를 수행합니다.
+
+```python
+python test_mcp_remote.py
+```
+
+[test_mcp_remote.py](./runtime/kb-retriever/test_mcp_remote.py)에서는 아래와 같이 mcp_url에 요청을 보내서 동작을 확인합니다. 아래에서는 [kb-retrieve](./runtime/kb-retriever/mcp_server_retrieve.py) MCP server의 retrieve tool에 대한 동작 테스트를 수행합니다.
+
+```python
+mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
+headers = {
+    "Authorization": f"Bearer {bearer_token}",
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream"
+}
+
+async with streamablehttp_client(mcp_url, headers, timeout=120, terminate_on_close=False) as (
+    read_stream, write_stream, _):
+
+    params = {"keyword": "보일러 에러 코드"}
+    async with ClientSession(read_stream, write_stream) as session:
+        result = await asyncio.wait_for(session.call_tool("retrieve", params), timeout=30)
+        print(f"retrieve result: {result}")
+```
+
+
+### Knowledge Base 문서 동기화 하기 
 
 Knowledge Base에서 문서를 활용하기 위해서는 S3에 문서 등록 및 동기화기 필요합니다. [S3 Console](https://us-west-2.console.aws.amazon.com/s3/home?region=us-west-2)에 접속하여 "storage-for-agentcore-xxxxxxxxxxxx-us-west-2"를 선택하고, 아래와 같이 docs폴더를 생성한 후에 파일을 업로드 합니다. 
 
