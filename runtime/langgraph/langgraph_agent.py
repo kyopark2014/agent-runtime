@@ -74,8 +74,6 @@ async def call_model(state: State, config):
     if tools is None:
         logger.warning("tools is None, using empty list")
         tools = []
-
-    logger.info(f"tools: {tools}")
     
     model = chatModel.bind_tools(tools)
 

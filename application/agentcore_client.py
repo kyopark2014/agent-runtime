@@ -670,6 +670,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                 if line:
                     print(f"-> {line}")
                 
+                tool_name = ""
                 if line.startswith('data: '):
                     data = line[6:].strip()  # Remove "data:" prefix and whitespace
                     if data:  # Only process non-empty data
