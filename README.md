@@ -237,7 +237,7 @@ def use_aws(service_name, operation_name, parameters, region, label, profile_nam
 
 #### RAG의 활용: kb-retriever
 
-[kb-retriever](./runtime/kb-retriever/mcp_retrieve.py)를 이용해 완전관리형 RAG 서비스인 Knowledge base의 정보를 조회할 수 있습니다.[mcp_server_retrieve.py](./runtime/kb-retriever/mcp_server_retrieve.py)에서는 agent가 전달하는 keyword를 이용해 mcp_retrieve의 retrieve를 호출합니다. 
+[kb-retriever](./runtime/kb-retriever/mcp_retrieve.py)를 이용해 완전관리형 RAG 서비스인 Knowledge base의 정보를 조회할 수 있습니다. [mcp_server_retrieve.py](./runtime/kb-retriever/mcp_server_retrieve.py)에서는 agent가 전달하는 keyword를 이용해 mcp_retrieve의 retrieve를 호출합니다. 
 
 ```python
 @mcp.tool()
