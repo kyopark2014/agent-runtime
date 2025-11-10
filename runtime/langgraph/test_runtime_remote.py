@@ -21,7 +21,9 @@ bedrock_region = config['region']
 
 def load_agentcore_config(agent_name):
     client = boto3.client('bedrock-agentcore-control', region_name=bedrock_region)
-    response = client.list_agent_runtimes()
+    response = client.list_agent_runtimes(
+        maxResults=100
+    )
     print(f"response: {response}")
 
     agentRuntimes = response['agentRuntimes']
