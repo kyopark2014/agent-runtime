@@ -389,11 +389,41 @@ Knowledge Base에서 문서를 활용하기 위해서는 S3에 문서 등록 및
 <img width="1533" height="287" alt="noname" src="https://github.com/user-attachments/assets/2edd3b6b-dbce-4784-b640-139fa84cc223" />
 
 
-### Stream
+## Agent 구현
 
 AgentCore는 SSE 방식의 stream을 제공합니다. 
 
-#### LangGraph
+### LangGraph
+
+#### LangGraph Agent
+
+아래는 LangGraph로 구현한 ReAct agent입니다. 
+
+```python
+def buildChatAgentWithHistory(tools):
+    tool_node = ToolNode(tools)
+
+    workflow = StateGraph(State)
+
+    workflow.add_node("agent", call_model)
+    workflow.add_node("action", tool_node)
+    workflow.add_edge(START, "agent")
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "continue": "action",
+            "end": END,
+        },
+    )
+    workflow.add_edge("action", "agent")
+
+    return workflow.compile(
+        checkpointer=chat.checkpointer,
+        store=chat.memorystore
+    )
+```
+
 
 [LangGraph - agent.py](./langgraph_stream/agent.py)와 같이 stream 방식으로 처리하면 agent가 좀 더 동적으로 동작하게 할 수 있습니다. 아래와 같이 MCP 서버의 정보로 json 파일을 만든 후에 MultiServerMCPClient으로 client를 설정하고 나서 agent를 생성합니다. 이후 stream을 이용해 출력할때 json 형태의 결과값을 stream으로 전달합니다. 
 
