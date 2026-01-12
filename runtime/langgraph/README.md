@@ -66,12 +66,9 @@ app = BedrockAgentCoreApp()
 
 @app.entrypoint
 async def agent_langgraph(payload):
-
-query = payload.get("prompt")
+    query = payload.get("prompt")
     mcp_servers = payload.get("mcp_servers", [])
-    model_name = payload.get("model_name")
     user_id = payload.get("user_id")
-    history_mode = payload.get("history_mode")
 
     mcp_json = mcp_config.load_selected_config(mcp_servers)
     server_params = langgraph_agent.load_multiple_mcp_server_parameters(mcp_json)
