@@ -57,7 +57,7 @@ CMD ["uv", "run", "opentelemetry-instrument", "uvicorn", "agent:app", "--host", 
 ```
 
 
-AgentCore에서 사용할 Agent를 구현합니다.
+AgentCore에서 사용할 Agent를 agent.py로 구현합니다.
 
 ```python
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -126,6 +126,25 @@ if __name__ == "__main__":
     app.run()
 ```
 
+Agent를 배포합니다.
+
+```python
+response = client.create_agent_runtime(
+    agentRuntimeName=runtime_name,
+    agentRuntimeArtifact={
+        'containerConfiguration': {
+            'containerUri': f"{accountId}.dkr.ecr.{aws_region}.amazonaws.com/{repositoryName}:{imageTags}"
+        }
+    },
+    networkConfiguration={"networkMode":"PUBLIC"}, 
+    roleArn=agent_runtime_role
+)
+print(f"response of create agent runtime: {response}")
+
+agentRuntimeArn = response['agentRuntimeArn']
+```
+
+
 ## Client
 
 아래와 같이 runtime id와 session_id를 이용해 client에서 서버로 요청을 보내고 결과를 stream으로 수신합니다.
@@ -133,16 +152,13 @@ if __name__ == "__main__":
 ```python
 prompt = "보일러 에러 코드?"
 mcp_servers = ["kb-retriever"]
-model_name = "Claude 3.7 Sonnet"
-user_id = target
-history_mode = "Disable"
+user_id = "user01"
+runtime_session_id = str(uuid.uuid4())
 
 payload = json.dumps({
     "prompt": prompt,
     "mcp_servers": mcp_servers,
-    "model_name": model_name,
-    "user_id": user_id,
-    "history_mode": history_mode
+    "user_id": user_id
 })
 
 agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
