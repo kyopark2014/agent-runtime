@@ -129,6 +129,7 @@ if __name__ == "__main__":
 Agent를 배포합니다.
 
 ```python
+client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
 response = client.create_agent_runtime(
     agentRuntimeName=runtime_name,
     agentRuntimeArtifact={
