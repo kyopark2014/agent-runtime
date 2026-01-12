@@ -21,7 +21,7 @@ fi
 
 # Build Docker image with build arguments
 echo ""
-echo "🔨 Building Docker image..."
+echo "🔨 Building Docker image with ARG credentials..."
 sudo docker build \
     --platform linux/arm64 \
     -t ${DOCKER_NAME}:latest .

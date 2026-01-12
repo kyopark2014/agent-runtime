@@ -201,7 +201,35 @@ def get_tool_info(tool_name, tool_content):
     # aws document
     elif tool_name == "search_documentation":
         try:
-            json_data = json.loads(tool_content)
+            # Handle case where tool_content is already a list (e.g., from toolResult)
+            if isinstance(tool_content, list):
+                # Extract text from list items if they have 'text' key
+                json_data = []
+                for item in tool_content:
+                    if isinstance(item, dict) and 'text' in item:
+                        try:
+                            parsed_text = json.loads(item['text'])
+                            if isinstance(parsed_text, dict) and 'search_results' in parsed_text:
+                                json_data = parsed_text['search_results']
+                            elif isinstance(parsed_text, list):
+                                json_data = parsed_text
+                            else:
+                                json_data.append(parsed_text)
+                        except (json.JSONDecodeError, TypeError):
+                            logger.info(f"Failed to parse text from list item: {item}")
+                    elif isinstance(item, dict):
+                        json_data.append(item)
+                    else:
+                        json_data.append(item)
+            elif isinstance(tool_content, str):
+                json_data = json.loads(tool_content)
+            else:
+                json_data = tool_content
+            
+            # Ensure json_data is iterable
+            if not isinstance(json_data, list):
+                json_data = [json_data]
+            
             for item in json_data:
                 logger.info(f"item: {item}")
                 
@@ -215,7 +243,9 @@ def get_tool_info(tool_name, tool_content):
                 if isinstance(item, dict) and 'url' in item and 'title' in item:
                     url = item['url']
                     title = item['title']
-                    content_text = item['context'][:100] + "..." if len(item['context']) > 100 else item['context']
+                    context_text = item.get('context', '')
+                    content_text = context_text[:100] + "..." if len(context_text) > 100 else context_text
+                    content += context_text + "\n\n"
                     tool_references.append({
                         "url": url,
                         "title": title,
@@ -224,8 +254,11 @@ def get_tool_info(tool_name, tool_content):
                 else:
                     logger.info(f"Invalid item format: {item}")
                     
-        except json.JSONDecodeError:
-            logger.info(f"JSON parsing error: {tool_content}")
+        except json.JSONDecodeError as e:
+            logger.info(f"JSON parsing error: {e}, tool_content type: {type(tool_content)}")
+            pass
+        except Exception as e:
+            logger.error(f"Error processing search_documentation: {e}")
             pass
 
         logger.info(f"content: {content}")

@@ -40,7 +40,7 @@ numberOfDocs = 4
 MSG_LENGTH = 100    
 
 # Default model
-model_name = "Claude 3.5 Sonnet"
+model_name = "Claude 4.5 Haiku"
 model_type = "claude"
 models = info.get_model_info(model_name)
 model_id = models[0]["model_id"]
@@ -127,7 +127,6 @@ def get_chat(extended_thinking=None):
             "max_tokens":maxOutputTokens,     
             "temperature":0.1,
             "top_k":250,
-            "top_p":0.9,
             "stop_sequences": [STOP_SEQUENCE]
         }
 
