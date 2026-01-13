@@ -633,4 +633,8 @@ MCP server에서 "use_aws"를 선택하고, "내 cloudwatch 로그 리스트는?
 [AWS re:Invent 2025 - Architecting scalable and secure agentic AI with Bedrock AgentCore (AIM431)](https://www.youtube.com/watch?v=wqmeZOT6mmc)
 
 
+[Deploy Production-Ready Agents in 22 Minutes with AgentCore Runtime](https://www.youtube.com/watch?v=Q-tYIAuv9WI)
 
+
+
+[Deploy Production-Ready Agents in 22 Minutes with AgentCore Runtime
