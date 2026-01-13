@@ -1,0 +1,9 @@
+boto3
+mcp
+uv
+bedrock-agentcore
+bedrock-agentcore-starter-toolkit
+aws-opentelemetry-distro>=0.10.0
+claude-agent-sdk
+requests
+uuid
