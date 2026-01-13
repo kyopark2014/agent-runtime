@@ -3,10 +3,17 @@ import os
 import json
 import boto3
 import requests
+import httpx
+from datetime import datetime, timezone
+
+from botocore.auth import SigV4Auth as BotocoreSigV4Auth
+from botocore.awsrequest import AWSRequest
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
+from urllib.parse import urlparse
+            
 def load_config():
     config = None
     
@@ -22,128 +29,69 @@ config = load_config()
 projectName = config['projectName']
 region = config['region']
 
-def create_cognito_bearer_token(config):
-    """Get a fresh bearer token from Cognito"""
-    try:
-        cognito_config = config['cognito']
+def get_sigv4_headers(method: str, url: str, body: bytes = None, region: str = None) -> dict:
+    """Generate SigV4 authentication headers for HTTP request"""
+    if region is None:
         region = config['region']
-        client_id = cognito_config['client_id']
-        username = cognito_config['test_username']
-        password = cognito_config['test_password']
-        
-        # Create Cognito client
-        client = boto3.client('cognito-idp', region_name=region)
-        
-        # Authenticate and get tokens
-        response = client.initiate_auth(
-            ClientId=client_id,
-            AuthFlow='USER_PASSWORD_AUTH',
-            AuthParameters={
-                'USERNAME': username,
-                'PASSWORD': password
-            }
-        )
-        
-        auth_result = response['AuthenticationResult']
-        access_token = auth_result['AccessToken']
-        # id_token = auth_result['IdToken']
-        
-        print("Successfully obtained fresh Cognito tokens")
-        return access_token
-        
-    except Exception as e:
-        print(f"Error getting Cognito token: {e}")
-        return None
-
-def get_bearer_token():
-    try:
-        secret_name = config['secret_name']
-        session = boto3.Session()
-        client = session.client('secretsmanager', region_name=region)
-        response = client.get_secret_value(SecretId=secret_name)
-        bearer_token_raw = response['SecretString']
-        
-        token_data = json.loads(bearer_token_raw)        
-        if 'bearer_token' in token_data:
-            bearer_token = token_data['bearer_token']
-            return bearer_token
-        else:
-            print("No bearer token found in secret manager")
-            return None
     
-    except Exception as e:
-        print(f"Error getting stored token: {e}")
-        return None
-
-def save_bearer_token(secret_name, bearer_token):
-    try:        
-        session = boto3.Session()
-        client = session.client('secretsmanager', region_name=region)
-        
-        # Create secret value with bearer_key 
-        secret_value = {
-            "bearer_key": "mcp_server_bearer_token",
-            "bearer_token": bearer_token
-        }
-        
-        # Convert to JSON string
-        secret_string = json.dumps(secret_value)
-        
-        # Check if secret already exists
-        try:
-            client.describe_secret(SecretId=secret_name)
-            # Secret exists, update it
-            client.put_secret_value(
-                SecretId=secret_name,
-                SecretString=secret_string
-            )
-            print(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
-        except client.exceptions.ResourceNotFoundException:
-            # Secret doesn't exist, create it
-            client.create_secret(
-                Name=secret_name,
-                SecretString=secret_string,
-                Description="MCP Server Cognito credentials with bearer key and token"
-            )
-            print(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
-            
-    except Exception as e:
-        print(f"Error saving bearer token: {e}")
-        # Continue execution even if saving fails
+    # Get AWS credentials for SigV4 signing
+    boto_session = boto3.Session()
+    credentials = boto_session.get_credentials().get_frozen_credentials()
+    
+    # Parse URL
+    from urllib.parse import urlparse
+    parsed_url = urlparse(url)
+    host = parsed_url.netloc
+    path = parsed_url.path + ('?' + parsed_url.query if parsed_url.query else '')
+    
+    # Generate timestamp for request
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    
+    # Create AWS request for signing
+    headers = {
+        'host': host,
+        'x-amz-date': timestamp,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream'
+    }
+    
+    if body:
+        headers['Content-Length'] = str(len(body))
+    
+    request = AWSRequest(
+        method=method,
+        url=url,
+        headers=headers,
+        data=body
+    )
+    
+    # Sign the request with SigV4
+    auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
+    auth.add_auth(request)
+    
+    # Build headers dict
+    signed_headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream',
+        'X-Amz-Date': timestamp,
+        'Authorization': request.headers['Authorization']
+    }
+    
+    # Add security token if present
+    if credentials.token:
+        signed_headers['X-Amz-Security-Token'] = credentials.token
+    
+    return signed_headers
 
 async def main():
     agent_arn = config['agent_runtime_arn']
     region = config['region']
-    
-    # Check basic AWS connectivity
-    bearer_token = get_bearer_token()
-    print(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
-    #print(f"Bearer token from secret manager: {bearer_token}")
-
-    if not bearer_token:    
-        # Try to get fresh bearer token from Cognito
-        print("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
-        bearer_token = create_cognito_bearer_token(config)
-        print(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
-        
-        if bearer_token:
-            secret_name = config['secret_name']
-            save_bearer_token(secret_name, bearer_token)
-        else:
-            print("Failed to get bearer token from Cognito. Exiting.")
-            return
-                
+                    
     encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
     
     # Try different endpoint URLs based on common patterns
     mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
-    headers = {
-        "Authorization": f"Bearer {bearer_token}",
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream"
-    }
     print(f"MCP URL: {mcp_url}")
-    print(f"Headers: {headers}")
 
     # Prepare the request body for MCP initialization
     request_body = json.dumps({
@@ -159,6 +107,10 @@ async def main():
             }
         }
     })
+    
+    # Generate SigV4 headers for the request
+    headers = get_sigv4_headers("POST", mcp_url, request_body.encode('utf-8'), region)
+    print(f"Headers: {headers}")
     
     successful_url = None
     successful_headers = None
@@ -179,39 +131,7 @@ async def main():
         else:
             print(f"Error: {response.status_code}")
             print(f"Response body: {response.text}")
-            if response.status_code == 403:
-                print("403 Forbidden - Token may be expired, trying to get fresh token from Cognito...")
-                # Try to get fresh bearer token from Cognito
-                fresh_bearer_token = create_cognito_bearer_token(config)
-                if fresh_bearer_token:
-                    print("Successfully obtained fresh token, updating headers and retrying...")
-                    # Update headers with fresh token
-                    headers["Authorization"] = f"Bearer {fresh_bearer_token}"
-                    # Save the fresh token
-                    secret_name = config['secret_name']
-                    save_bearer_token(secret_name, fresh_bearer_token)
-                    
-                    # Retry the request with fresh token
-                    response = requests.post(
-                        mcp_url,
-                        headers=headers,
-                        data=request_body,
-                        timeout=30
-                    )
-                    
-                    if response.status_code == 200:
-                        print("Success with fresh token!")
-                        successful_url = mcp_url
-                        successful_headers = headers
-                    else:
-                        print(f"Still getting error with fresh token: {response.status_code}")
-                        print(f"Response body: {response.text}")
-                        return
-                else:
-                    print("Failed to get fresh token from Cognito")
-                    return
-            else:
-                return
+            return
     except Exception as e:
         print(f"Connection failed: {e}")
         return
@@ -229,11 +149,78 @@ async def main():
         print(f"Timeout: 120 seconds")
         
         # Now try the MCP connection with better error handling
-        print("1. Attempting streamablehttp_client connection...")
-        async with streamablehttp_client(mcp_url, headers, timeout=120, terminate_on_close=False) as (
+        print("1. Attempting streamable_http_client connection...")
+        
+        # Create a custom httpx event hook that signs requests with SigV4
+        async def sign_request(request: httpx.Request) -> None:
+            """Sign the request with AWS SigV4 including the body"""
+            # Get credentials
+            boto_session = boto3.Session()
+            credentials = boto_session.get_credentials().get_frozen_credentials()
+            
+            # Parse URL
+            parsed_url = urlparse(str(request.url))
+            host = parsed_url.netloc
+            
+            # Generate timestamp
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+            
+            # Read request body if available
+            body = None
+            if request.content:
+                if isinstance(request.content, bytes):
+                    body = request.content
+                else:
+                    # Try to read the body asynchronously
+                    try:
+                        body = await request.aread()
+                        # Reset the stream so it can be read again
+                        if hasattr(request, '_content'):
+                            request._content = body
+                    except Exception:
+                        # If we can't read the body, sign without it
+                        pass
+            
+            # Create AWS request headers
+            aws_headers = {
+                'host': host,
+                'x-amz-date': timestamp,
+                'Content-Type': request.headers.get('Content-Type', 'application/json'),
+                'Accept': request.headers.get('Accept', 'application/json, text/event-stream')
+            }
+            
+            if body:
+                aws_headers['Content-Length'] = str(len(body))
+            
+            # Create AWS request for signing
+            aws_request = AWSRequest(
+                method=request.method,
+                url=str(request.url),
+                headers=aws_headers,
+                data=body
+            )
+            
+            # Sign the request
+            auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
+            auth.add_auth(aws_request)
+            
+            # Update request headers
+            request.headers['X-Amz-Date'] = timestamp
+            request.headers['Authorization'] = aws_request.headers['Authorization']
+            
+            if credentials.token:
+                request.headers['X-Amz-Security-Token'] = credentials.token
+        
+        # Use event hooks for signing
+        http_client = httpx.AsyncClient(
+            timeout=120.0,
+            event_hooks={'request': [sign_request]}
+        )
+        
+        async with streamable_http_client(mcp_url, http_client=http_client, terminate_on_close=False) as (
             read_stream, write_stream, _):
             
-            print("2. streamablehttp_client connection successful!")
+            print("2. streamable_http_client connection successful!")
             print("3. Creating ClientSession...")
             
             async with ClientSession(read_stream, write_stream) as session:

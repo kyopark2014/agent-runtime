@@ -73,15 +73,7 @@ def create_agent_runtime(targetAgentRuntime):
             },
             networkConfiguration={"networkMode":"PUBLIC"}, 
             roleArn=agent_runtime_role,
-            protocolConfiguration={"serverProtocol":"MCP"},
-            authorizerConfiguration={
-                "customJWTAuthorizer": {
-                    "allowedClients": [
-                        config['cognito']['client_id']
-                    ],
-                    "discoveryUrl": config['cognito']['discovery_url']
-                }
-            }
+            protocolConfiguration={"serverProtocol":"MCP"}
         )
         print(f"response of create agent runtime: {response}")
 
@@ -104,15 +96,7 @@ def update_agent_runtime(agentRuntimeId):
         },
         roleArn=agent_runtime_role,
         networkConfiguration={"networkMode":"PUBLIC"},
-        protocolConfiguration={"serverProtocol":"MCP"},
-        authorizerConfiguration={
-            "customJWTAuthorizer": {
-                "allowedClients": [
-                    config['cognito']['client_id']
-                ],
-                "discoveryUrl": config['cognito']['discovery_url']
-            }
-        }
+        protocolConfiguration={"serverProtocol":"MCP"}
     )
     print(f"response: {response}")
 

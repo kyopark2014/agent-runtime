@@ -51,7 +51,6 @@ def retrieve(keyword: str) -> str:
         return f"Error retrieving data: {str(e)}"
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="streamable-http")
 
 
