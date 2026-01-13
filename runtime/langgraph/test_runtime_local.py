@@ -5,17 +5,13 @@ import os
 
 async def main():
     print(f"\n=== invoke agentcore runtime ===")
-    
-    # 로컬 MCP 서버 사용을 위한 환경 변수 설정
-    os.environ["USE_LOCAL_MCP"] = "true"
-    os.environ["LOCAL_MCP_URL"] = "http://127.0.0.1:8000/mcp"
-    
+        
     runtime_session_id = str(uuid.uuid4())
     print(f"runtime_session_id: {runtime_session_id}")
 
     prompt = "보일러 에러 코드?"
     mcp_servers = ["kb-retriever"]
-    model_name = "Claude 3.7 Sonnet"
+    model_name = "Claude 4.5 Haiku"
     user_id = uuid.uuid4().hex
     history_mode = "Disable"
 

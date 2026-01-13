@@ -1,9 +1,7 @@
 import logging
 import sys
-import json
 import os
 import boto3
-from botocore.exceptions import NoCredentialsError, ClientError
 import utils
 
 logging.basicConfig(
@@ -48,8 +46,6 @@ def get_agent_runtime_arn(mcp_type: str):
 def load_config(mcp_type):
     global bearer_token, gateway_url
 
-    secret_name = 'agentcore/credentials' # use prebuilt secret
-
     if mcp_type == "aws document":
         mcp_type = 'aws_documentation'
 
@@ -57,12 +53,15 @@ def load_config(mcp_type):
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
-
+        
+        mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
+        
         return {
             "mcpServers": {
                 "kb-retriever": {
                     "type": "streamable_http",
-                    "url": f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT",
+                    "url": mcp_url,
+                    "region": region,
                     "headers": {
                         "Content-Type": "application/json",
                         "Accept": "application/json, text/event-stream"
@@ -75,12 +74,15 @@ def load_config(mcp_type):
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
-
+        
+        mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
+        
         return {
             "mcpServers": {
                 "use_aws": {
                     "type": "streamable_http",
-                    "url": f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT",
+                    "url": mcp_url,
+                    "region": region,
                     "headers": {
                         "Content-Type": "application/json",
                         "Accept": "application/json, text/event-stream"

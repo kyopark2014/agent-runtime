@@ -124,18 +124,6 @@ if [ $? -eq 0 ]; then
     echo "To stop: docker stop ${DOCKER_NAME}-container"
     echo "To remove: docker rm ${DOCKER_NAME}-container"
     echo ""
-    echo "Verifying AWS credentials in container..."
-    sleep 2
-    if docker exec ${DOCKER_NAME}-container aws sts get-caller-identity > /dev/null 2>&1; then
-        echo "AWS credentials verified successfully!"
-        docker exec ${DOCKER_NAME}-container aws sts get-caller-identity
-    else
-        echo "Warning: AWS credentials verification failed"
-        echo "   You may need to check:"
-        echo "   1. AWS credentials are correctly configured on host"
-        echo "   2. Container has access to mounted credentials"
-        echo "   Run manually: docker exec -it ${DOCKER_NAME}-container aws sts get-caller-identity"
-    fi
 else
     echo "Error: Failed to start container"
     exit 1

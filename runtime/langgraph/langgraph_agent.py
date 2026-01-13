@@ -257,6 +257,7 @@ def buildChatAgentWithHistory(tools):
         store=chat.memorystore
     )
 
+
 def load_multiple_mcp_server_parameters(mcp_json: dict):
     mcpServers = mcp_json.get("mcpServers")
   
@@ -264,11 +265,22 @@ def load_multiple_mcp_server_parameters(mcp_json: dict):
     if mcpServers is not None:
         for server_name, config in mcpServers.items():
             if config.get("type") == "streamable_http":
-                server_info[server_name] = {                    
-                    "transport": "streamable_http",
-                    "url": config.get("url"),
-                    "headers": config.get("headers", {})
-                }
+                url = config.get("url")
+                if server_name in ["kb-retriever", "use_aws"]:
+                    server_info[server_name] = {                    
+                        "transport": "streamable_http",
+                        "url": url,
+                        "headers": {
+                            "Content-Type": "application/json",
+                            "Accept": "application/json, text/event-stream"
+                        }
+                    }
+                else:
+                    server_info[server_name] = {                    
+                        "transport": "streamable_http",
+                        "url": url,
+                        "headers": config.get("headers", {})
+                    }
             else:
                 command = config.get("command", "")
                 args = config.get("args", [])
