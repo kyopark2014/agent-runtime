@@ -61,7 +61,6 @@ def load_config(mcp_type):
                 "kb-retriever": {
                     "type": "streamable_http",
                     "url": mcp_url,
-                    "region": region,
                     "headers": {
                         "Content-Type": "application/json",
                         "Accept": "application/json, text/event-stream"
@@ -82,7 +81,6 @@ def load_config(mcp_type):
                 "use_aws": {
                     "type": "streamable_http",
                     "url": mcp_url,
-                    "region": region,
                     "headers": {
                         "Content-Type": "application/json",
                         "Accept": "application/json, text/event-stream"

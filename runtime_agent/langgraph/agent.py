@@ -24,6 +24,89 @@ logging.basicConfig(
 )
 logger = logging.getLogger("agent")
 
+# Monkey patch httpx.AsyncClient for SigV4 authentication
+original_init = httpx.AsyncClient.__init__
+def patched_init(self, *args, **kwargs):
+    # Add SigV4 signing event hook if needed
+    if auth_type:
+        async def sign_request(request: httpx.Request) -> None:
+            """Sign the request with AWS SigV4 including the body"""
+            # Only sign requests to bedrock-agentcore
+            if "bedrock-agentcore" not in str(request.url):
+                return
+            
+            # Get credentials
+            boto_session = boto3.Session()
+            credentials = boto_session.get_credentials().get_frozen_credentials()
+            
+            # Parse URL
+            parsed_url = urlparse(str(request.url))
+            host = parsed_url.netloc
+            
+            # Generate timestamp
+            timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+            
+            # Read request body if available
+            body = None
+            if request.content:
+                if isinstance(request.content, bytes):
+                    body = request.content
+                else:
+                    try:
+                        body = await request.aread()
+                        if hasattr(request, '_content'):
+                            request._content = body
+                    except Exception:
+                        pass
+            
+            # Create AWS request headers
+            aws_headers = {
+                'host': host,
+                'x-amz-date': timestamp,
+                'Content-Type': request.headers.get('Content-Type', 'application/json'),
+                'Accept': request.headers.get('Accept', 'application/json, text/event-stream')
+            }
+            
+            if body:
+                aws_headers['Content-Length'] = str(len(body))
+            
+            # Create AWS request for signing
+            aws_request = AWSRequest(
+                method=request.method,
+                url=str(request.url),
+                headers=aws_headers,
+                data=body
+            )
+            
+            # Sign the request
+            region = utils.load_config().get("region", "us-west-2")
+            auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
+            auth.add_auth(aws_request)
+            
+            # Update request headers
+            request.headers['X-Amz-Date'] = timestamp
+            request.headers['Authorization'] = aws_request.headers['Authorization']
+            
+            if credentials.token:
+                request.headers['X-Amz-Security-Token'] = credentials.token
+        
+        # Add event_hooks to kwargs if not already present
+        if 'event_hooks' not in kwargs:
+            kwargs['event_hooks'] = {'request': [], 'response': []}
+        elif not isinstance(kwargs['event_hooks'], dict):
+            kwargs['event_hooks'] = {'request': [], 'response': []}
+        
+        if 'request' not in kwargs['event_hooks']:
+            kwargs['event_hooks']['request'] = []
+        
+        # Add the sign_request hook
+        kwargs['event_hooks']['request'].append(sign_request)
+    
+    # Call original init with modified kwargs
+    original_init(self, *args, **kwargs)
+
+auth_type = "iam"
+        
 app = BedrockAgentCoreApp()
 
 @app.entrypoint
@@ -59,119 +142,17 @@ async def agent_langgraph(payload):
     if not server_params:
         logger.info("No valid MCP servers configured, using empty tools list")
         tools = []
-    else:
-        # Monkey patch httpx.AsyncClient for SigV4 authentication
-        original_init = httpx.AsyncClient.__init__
-        
-        # Get region from server_params URL for SigV4 signing
-        sigv4_region = None
-        for server_name, config in server_params.items():
-            if config.get("transport") == "streamable_http" and server_name in ["kb-retriever", "use_aws"]:
-                url = config.get("url", "")
-                if "bedrock-agentcore" in url:
-                    # Extract region from URL: https://bedrock-agentcore.{region}.amazonaws.com/...
-                    try:
-                        from urllib.parse import urlparse
-                        parsed_url = urlparse(url)
-                        host_parts = parsed_url.netloc.split('.')
-                        if len(host_parts) >= 2 and host_parts[0] == "bedrock-agentcore":
-                            sigv4_region = host_parts[1]
-                        else:
-                            sigv4_region = utils.load_config().get("region", "us-west-2")
-                    except Exception:
-                        sigv4_region = utils.load_config().get("region", "us-west-2")
-                    break
-        
-        def patched_init(self, *args, **kwargs):
-            # Add SigV4 signing event hook if needed
-            if sigv4_region:
-                async def sign_request(request: httpx.Request) -> None:
-                    """Sign the request with AWS SigV4 including the body"""
-                    # Only sign requests to bedrock-agentcore
-                    if "bedrock-agentcore" not in str(request.url):
-                        return
-                    
-                    # Get credentials
-                    boto_session = boto3.Session()
-                    credentials = boto_session.get_credentials().get_frozen_credentials()
-                    
-                    # Parse URL
-                    parsed_url = urlparse(str(request.url))
-                    host = parsed_url.netloc
-                    
-                    # Generate timestamp
-                    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-                    
-                    # Read request body if available
-                    body = None
-                    if request.content:
-                        if isinstance(request.content, bytes):
-                            body = request.content
-                        else:
-                            try:
-                                body = await request.aread()
-                                if hasattr(request, '_content'):
-                                    request._content = body
-                            except Exception:
-                                pass
-                    
-                    # Create AWS request headers
-                    aws_headers = {
-                        'host': host,
-                        'x-amz-date': timestamp,
-                        'Content-Type': request.headers.get('Content-Type', 'application/json'),
-                        'Accept': request.headers.get('Accept', 'application/json, text/event-stream')
-                    }
-                    
-                    if body:
-                        aws_headers['Content-Length'] = str(len(body))
-                    
-                    # Create AWS request for signing
-                    aws_request = AWSRequest(
-                        method=request.method,
-                        url=str(request.url),
-                        headers=aws_headers,
-                        data=body
-                    )
-                    
-                    # Sign the request
-                    auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", sigv4_region)
-                    auth.add_auth(aws_request)
-                    
-                    # Update request headers
-                    request.headers['X-Amz-Date'] = timestamp
-                    request.headers['Authorization'] = aws_request.headers['Authorization']
-                    
-                    if credentials.token:
-                        request.headers['X-Amz-Security-Token'] = credentials.token
-                
-                # Add event_hooks to kwargs if not already present
-                if 'event_hooks' not in kwargs:
-                    kwargs['event_hooks'] = {'request': [], 'response': []}
-                elif not isinstance(kwargs['event_hooks'], dict):
-                    kwargs['event_hooks'] = {'request': [], 'response': []}
-                
-                if 'request' not in kwargs['event_hooks']:
-                    kwargs['event_hooks']['request'] = []
-                
-                # Add the sign_request hook
-                kwargs['event_hooks']['request'].append(sign_request)
-            
-            # Call original init with modified kwargs
-            original_init(self, *args, **kwargs)
-        
-        # Apply monkey patch only if SigV4 is needed
-        # Keep it global so it applies to all httpx.AsyncClient instances created during tool execution
-        if sigv4_region:
+    else:        
+        logger.info(f"auth_type: {auth_type}")
+        if auth_type == "iam":
+            # Apply monkey patch only if SigV4 is needed
+            # Keep it global so it applies to all httpx.AsyncClient instances created during tool execution        
             httpx.AsyncClient.__init__ = patched_init
-            logger.info(f"Applied SigV4 monkey patch for region: {sigv4_region}")
+            logger.info(f"Applied SigV4 monkey patch for region: {auth_type}")
         
         client = MultiServerMCPClient(server_params)
         tools = await client.get_tools()
         
-        # Note: We don't restore the original __init__ here because tool execution
-        # creates new sessions that also need SigV4 authentication
-    
     tool_list = [tool.name for tool in tools]
     logger.info(f"tool_list: {tool_list}")
 
@@ -202,8 +183,6 @@ async def agent_langgraph(payload):
 
             if "messages" in value:
                 for message in value["messages"]:
-                    # if isinstance(message, HumanMessage):
-                    #     logger.info(f"HumanMessage: {message.content}")
                     if isinstance(message, AIMessage):
                         logger.info(f"AIMessage: {message.content}")
 
