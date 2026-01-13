@@ -14,6 +14,17 @@ import base64
 from datetime import datetime
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
+import logging
+
+# Setup logging for Knowledge Base functions
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(filename)s:%(lineno)d | %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger("installer")
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.json")
@@ -564,6 +575,349 @@ def push_to_ecr():
         return False
 
 # ============================================================================
+# Knowledge Base Creation Functions (from s3vector.py)
+# ============================================================================
+
+def create_bucket(bucket_name, region):
+    """Create S3 bucket for Knowledge Base storage"""
+    s3 = boto3.client('s3', region_name=region)
+    response = s3.list_buckets()
+    buckets = response.get('Buckets', [])
+    if not any(bucket['Name'] == bucket_name for bucket in buckets):
+        logger.info(f"bucket_name: {bucket_name} is not exists.")
+        
+        s3.create_bucket(
+            Bucket=bucket_name,
+            CreateBucketConfiguration={'LocationConstraint': region}
+        )
+        logger.info(f"bucket_name: {bucket_name} is created.")    
+        
+        s3.put_object(Bucket=bucket_name, Key='docs/')
+        logger.info(f"docs folder is created in {bucket_name}.")
+    else:
+        logger.info(f"bucket_name: {bucket_name} is already exists.")
+
+def create_knowledge_base(config):
+    """Create Knowledge Base with S3 Vector storage (from s3vector.py)"""
+    aws_region = config.get('region')
+    accountId = config.get('accountId')
+    projectName = config.get('projectName')
+    
+    # Create bucket for Knowledge Base
+    bucket_name = config.get("bucket_name", "")
+    print(f"bucket_name: {bucket_name}")
+    
+    if not bucket_name:
+        bucket_name = f"storage-for-{projectName}-{accountId}-{aws_region}"
+        config['bucket_name'] = bucket_name
+        print(f"bucket_name: {bucket_name}")
+        
+        create_bucket(bucket_name, aws_region)
+        update_config('bucket_name', bucket_name)
+    
+    # Create role for knowledge base
+    role_name = f"role-knowledge-base-for-{projectName}-{aws_region}"
+    
+    # IAM policy document for knowledge base role
+    knowledge_base_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "BedrockAllStatement",
+                "Action": "bedrock:*",
+                "Resource": "*",
+                "Effect": "Allow"
+            },
+            {
+                "Sid": "BedrockAgentStatement",
+                "Action": [
+                    "bedrock-agent:*"
+                ],
+                "Resource": "*",
+                "Effect": "Allow"
+            },
+            {
+                "Sid": "BedrockInvokeInferenceProfileStatement",
+                "Effect": "Allow",
+                "Action": [
+                    "bedrock:GetInferenceProfile",
+                    "bedrock:InvokeModel"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "S3BucketStatement",
+                "Effect": "Allow",
+                "Action": ["s3:*"],
+                "Resource": "*"
+            },
+            {
+                "Sid": "S3VectorsStatement",
+                "Effect": "Allow",
+                "Action": [
+                    "s3vectors:*"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+    
+    # Trust policy for Bedrock service
+    trust_policy = {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": {"Service": "bedrock.amazonaws.com"},
+                "Action": "sts:AssumeRole"
+            }
+        ]
+    }
+    
+    iam = boto3.client('iam', region_name=aws_region)    
+    response = iam.list_roles(MaxItems=200)    
+    roles = response.get('Roles', [])
+    role_arn = None
+    
+    if not any(role['RoleName'] == role_name for role in roles):
+        logger.info(f"role_name: {role_name} is not exists.")
+        response = iam.create_role(RoleName=role_name, AssumeRolePolicyDocument=json.dumps(trust_policy))
+        role_arn = response['Role']['Arn']
+        logger.info(f"role_arn: {role_arn}")
+        
+        iam.put_role_policy(RoleName=role_name, PolicyName=f"knowledge-base-for-{projectName}-{aws_region}", PolicyDocument=json.dumps(knowledge_base_policy))
+        
+        logger.info(f"role_name: {role_name} is created.")
+    else:
+        logger.info(f"role_name: {role_name} is already exists.")
+        
+        # Get the existing role ARN
+        for role in roles:
+            if role['RoleName'] == role_name:
+                role_arn = role['Arn']
+                logger.info(f"role_arn: {role_arn}")
+                break
+        
+        # Update trust policy for existing role
+        iam.update_assume_role_policy(RoleName=role_name, PolicyDocument=json.dumps(trust_policy))
+        logger.info(f"Updated trust policy for existing role: {role_name}")
+        
+        # Update policy for existing role to ensure all permissions
+        iam.put_role_policy(RoleName=role_name, PolicyName=f"knowledge-base-for-{projectName}-{aws_region}", PolicyDocument=json.dumps(knowledge_base_policy))
+        logger.info(f"Updated policy for existing role: {role_name}")
+    
+    # Create S3 Vector Bucket client
+    client = boto3.client('s3vectors', region_name=aws_region)
+    
+    s3_vector_bucket_name = config.get('s3_vector_bucket_name', "")
+    logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name}")
+    s3_vector_bucket_arn = config.get('s3_vector_bucket_arn', "")
+    logger.info(f"s3_vector_bucket_arn: {s3_vector_bucket_arn}")
+    
+    if not s3_vector_bucket_name or not s3_vector_bucket_arn:
+        s3_vector_bucket_name = f"s3-vector-for-{projectName}-{accountId}-{aws_region}"
+        logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name}")
+                
+        response = client.list_vector_buckets(maxResults=50)
+        vectorBuckets = response.get('vectorBuckets', [])
+        if not any(vectorBucket['vectorBucketName'] == s3_vector_bucket_name for vectorBucket in vectorBuckets):
+            response = client.create_vector_bucket(vectorBucketName=s3_vector_bucket_name)
+            logger.info(f"response of create_vector_bucket: {response}")
+            
+            logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is created.")
+            # Refresh list to fetch ARN after creation
+            response = client.list_vector_buckets(maxResults=50)
+            vectorBuckets = response.get('vectorBuckets', [])
+        else:
+            logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is already exists.")
+        
+        # Resolve ARN for the target bucket
+        for vectorBucket in vectorBuckets:
+            if vectorBucket.get('vectorBucketName') == s3_vector_bucket_name:
+                s3_vector_bucket_arn = vectorBucket.get('vectorBucketArn', '')
+                logger.info(f"s3_vector_bucket_arn: {s3_vector_bucket_arn}")
+                break
+        if not s3_vector_bucket_arn:
+            logger.error("Failed to resolve s3_vector_bucket_arn after creation/list. Aborting.")
+            raise ValueError("s3_vector_bucket_arn is empty")
+        
+        update_config('s3_vector_bucket_name', s3_vector_bucket_name)
+        update_config('s3_vector_bucket_arn', s3_vector_bucket_arn)
+            
+    s3_vector_index_name = config.get('s3_vector_index_name', "")    
+    logger.info(f"s3_vector_index_name: {s3_vector_index_name}")
+    s3_vector_index_arn = config.get('s3_vector_index_arn', "")
+    logger.info(f"s3_vector_index_arn: {s3_vector_index_arn}")
+    
+    if not s3_vector_index_name or not s3_vector_index_arn:
+        s3_vector_index_name = f"s3-vector-index-for-{projectName}-{accountId}-{aws_region}"
+        logger.info(f"s3_vector_index_name: {s3_vector_index_name}")
+        update_config('s3_vector_index_name', s3_vector_index_name)
+        
+        response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
+        indexes = response.get('indexes', [])
+        
+        if not any(index['indexName'] == s3_vector_index_name for index in indexes):
+            response = client.create_index(
+                vectorBucketArn=s3_vector_bucket_arn,
+                indexName=s3_vector_index_name,
+                dataType='float32',
+                dimension=1024,
+                distanceMetric='cosine'                
+            )
+            logger.info(f"response of create_index: {response}")
+            
+            logger.info(f"{s3_vector_index_name} is created.")
+        else:
+            logger.info(f"{s3_vector_index_name} is already exists.")
+        
+        response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
+        indexes = response.get('indexes', [])
+        for index in indexes:
+            if index['indexName'] == s3_vector_index_name:
+                s3_vector_index_arn = index['indexArn']
+                logger.info(f"s3_vector_index_arn: {s3_vector_index_arn}")
+                break
+        
+        update_config('s3_vector_index_arn', s3_vector_index_arn)
+    
+    # Create knowledge base
+    parsingModelArn = f"arn:aws:bedrock:{aws_region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+    embeddingModelArn = f"arn:aws:bedrock:{aws_region}::foundation-model/amazon.titan-embed-text-v2:0"
+    
+    knowledge_base_name = projectName
+    knowledge_base_id = config.get('knowledge_base_id', "")
+    logger.info(f"knowledge_base_id: {knowledge_base_id}")  
+    
+    if not knowledge_base_id:
+        bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
+        response = bedrock_agent.list_knowledge_bases(maxResults=50)
+        knowledge_bases = response.get('knowledgeBaseSummaries', [])
+        if not any(knowledge_base['name'] == knowledge_base_name for knowledge_base in knowledge_bases):
+            logger.info(f"knowledge_base_name: {knowledge_base_name} is not exists.")
+            response = bedrock_agent.create_knowledge_base(
+                name=knowledge_base_name,
+                description=f"Knowledge base for {projectName} using s3 vector",
+                roleArn=role_arn,
+                knowledgeBaseConfiguration={
+                    "type": "VECTOR",
+                    "vectorKnowledgeBaseConfiguration": {
+                        "embeddingModelArn": embeddingModelArn, 
+                        "embeddingModelConfiguration": {
+                            "bedrockEmbeddingModelConfiguration": {
+                                "dimensions": 1024,
+                                "embeddingDataType": "FLOAT32"
+                            }
+                        },
+                        "supplementalDataStorageConfiguration": {
+                            "storageLocations": [
+                                {
+                                    "s3Location": {
+                                        "uri": f"s3://{bucket_name}"
+                                    },
+                                    "type": "S3"
+                                }
+                            ]
+                        }
+                    }
+                },
+                storageConfiguration={
+                    "type": "S3_VECTORS",
+                    "s3VectorsConfiguration": {
+                        "vectorBucketArn": s3_vector_bucket_arn,
+                        "indexArn": s3_vector_index_arn
+                    }
+                }
+            )
+            # Extract the actual knowledge base ID from the response
+            knowledge_base_id = response['knowledgeBase']['knowledgeBaseId']
+            update_config('knowledge_base_id', knowledge_base_id)
+            logger.info(f"knowledge_base_id: {knowledge_base_id}")
+            
+        else:
+            logger.info(f"knowledge_base_name: {knowledge_base_name} is already exists.")
+            for knowledge_base in knowledge_bases:
+                if knowledge_base['name'] == knowledge_base_name:
+                    knowledge_base_id = knowledge_base['knowledgeBaseId']
+                    update_config('knowledge_base_id', knowledge_base_id)
+                    logger.info(f"knowledge_base_id: {knowledge_base_id}")
+                    break
+    else:
+        logger.info(f"knowledge_base_id: {knowledge_base_id} is already exists.")
+    
+    # data source of knowledge base 
+    data_source_name = config.get('data_source_name', "")
+    logger.info(f"data_source_name: {data_source_name}")
+    if not data_source_name:
+        data_source_name = f"data-source-for-{projectName}-{aws_region}"
+        update_config('data_source_name', data_source_name)
+        logger.info(f"data_source_name: {data_source_name}")
+        
+        bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
+        response = bedrock_agent.list_data_sources(knowledgeBaseId=knowledge_base_id)
+        data_sources = response.get('dataSources', [])
+        logger.info(f"data_sources: {data_sources}")
+        
+        # Check if data source exists
+        existing_data_source = None
+        for data_source in data_sources:
+            if data_source.get('dataSourceName') == data_source_name:
+                existing_data_source = data_source
+                break
+        
+        if not existing_data_source:
+            try:
+                response = bedrock_agent.create_data_source(
+                    knowledgeBaseId=knowledge_base_id,
+                    name=data_source_name,
+                    description=f"Data source for {projectName} using s3 vector",
+                    dataSourceConfiguration={
+                        "type": "S3",
+                        "s3Configuration": {
+                            "bucketArn": f"arn:aws:s3:::{bucket_name}",
+                            "inclusionPrefixes": ["docs/"]
+                        }
+                    },
+                    dataDeletionPolicy="RETAIN",
+                    vectorIngestionConfiguration={
+                        'parsingConfiguration': {
+                            'bedrockFoundationModelConfiguration': {
+                                'modelArn': parsingModelArn,
+                                'parsingModality': 'MULTIMODAL'
+                            },
+                            'parsingStrategy': 'BEDROCK_FOUNDATION_MODEL'
+                        }
+                    }
+                )
+                logger.info(f"Created data source: {data_source_name}")
+            except Exception as e:
+                if "already exists" in str(e):
+                    logger.info(f"Data source {data_source_name} already exists.")
+                else:
+                    logger.error(f"Failed to create data source: {e}")
+                    raise e
+        else:
+            logger.info(f"Data source {data_source_name} already exists.")
+    
+    return knowledge_base_id
+
+def setup_knowledge_base(config):
+    """Setup Knowledge Base if needed"""
+    knowledge_base_id = config.get('knowledge_base_id', "")
+    print(f"knowledge_base_id: {knowledge_base_id}")
+    
+    if not knowledge_base_id:
+        print(f"knowledge_base_id is required. Creating Knowledge Base...")
+        knowledge_base_name = config.get('projectName')
+        print(f"knowledge_base_name: {knowledge_base_name}")
+        knowledge_base_id = create_knowledge_base(config)
+        print(f"✓ Knowledge Base created: {knowledge_base_id}")
+    else:
+        print(f"✓ Knowledge Base already exists: {knowledge_base_id}")
+    
+    return knowledge_base_id
+
+# ============================================================================
 # Agent Runtime Creation/Update Functions
 # ============================================================================
 
@@ -619,8 +973,8 @@ def create_agent_runtime_func(config, repository_name, image_tag):
         print("Error: agent_runtime_role not found in config.json")
         return None
     
-    runtime_name = repository_name
-    print(f"Creating agent runtime: {runtime_name}")
+    # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
+    runtime_name = repository_name.replace('-', '_')
     
     try:
         client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
@@ -633,7 +987,8 @@ def create_agent_runtime_func(config, repository_name, image_tag):
                 }
             },
             networkConfiguration={"networkMode": "PUBLIC"}, 
-            roleArn=agent_runtime_role
+            roleArn=agent_runtime_role,
+            protocolConfiguration={"serverProtocol": "MCP"}
         )
         
         print(f"✓ Agent runtime created: {response['agentRuntimeArn']}")
@@ -660,8 +1015,6 @@ def update_agent_runtime_func(config, repository_name, agent_runtime_id, image_t
         print("Error: agent_runtime_role not found in config.json")
         return None
     
-    print(f"Updating agent runtime: {repository_name}")
-    
     try:
         client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
         
@@ -675,7 +1028,7 @@ def update_agent_runtime_func(config, repository_name, agent_runtime_id, image_t
             },
             roleArn=agent_runtime_role,
             networkConfiguration={"networkMode": "PUBLIC"},
-            protocolConfiguration={"serverProtocol": "HTTP"}
+            protocolConfiguration={"serverProtocol": "MCP"}
         )
         
         print(f"✓ Agent runtime updated: {response['agentRuntimeArn']}")
@@ -696,11 +1049,25 @@ def create_agent_runtime():
         aws_region = config['region']
         project_name = config.get('projectName')
         
+        # Setup Knowledge Base if needed (from create_mcp_runtime.py)
+        print("\n1. Setting up Knowledge Base...")
+        knowledge_base_id = setup_knowledge_base(config)
+        
+        # Update knowledge_base_name if not set
+        knowledge_base_name = config.get("knowledge_base_name", "")
+        if not knowledge_base_name:
+            knowledge_base_name = project_name
+            update_config('knowledge_base_name', knowledge_base_name)
+        
         # Get current folder name
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
         
-        print(f"Repository name: {repository_name}")
+        # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
+        runtime_name = repository_name.replace('-', '_')
+        
+        print(f"\n2. Repository name: {repository_name}")
+        print(f"   Agent runtime name: {runtime_name}")
         
         # Get latest image tag
         image_tag = get_latest_image_tag(config)
@@ -719,18 +1086,19 @@ def create_agent_runtime():
         agent_runtime_id = None
         
         for agent_runtime in agent_runtimes:
-            if agent_runtime['agentRuntimeName'] == repository_name:
-                print(f"Agent runtime {repository_name} already exists")
+            if agent_runtime['agentRuntimeName'] == runtime_name:
+                print(f"Agent runtime {runtime_name} already exists")
                 is_exist = True
                 agent_runtime_id = agent_runtime['agentRuntimeId']
                 break
         
         # Create or update agent runtime
+        print("\n3. Creating/updating Agent Runtime...")
         if is_exist:
-            print(f"Updating agent runtime: {repository_name}")
+            print(f"Updating agent runtime: {runtime_name}")
             agent_runtime_arn = update_agent_runtime_func(config, repository_name, agent_runtime_id, image_tag)
         else:
-            print(f"Creating agent runtime: {repository_name}")
+            print(f"Creating agent runtime: {runtime_name}")
             agent_runtime_arn = create_agent_runtime_func(config, repository_name, image_tag)
         
         if not agent_runtime_arn:

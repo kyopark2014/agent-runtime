@@ -21,6 +21,29 @@ async def main():
             print("Available tools:")
             for tool in tool_result.tools:
                 print(f"  - {tool.name}: {tool.description}")
+            
+            # Test retrieve function
+            print("\n=== Testing retrieve function ===")
+            params = {
+                "keyword": "보일러 에러 코드"
+            }
+            
+            try:
+                result = await asyncio.wait_for(session.call_tool("retrieve", params), timeout=30)
+                print(f"retrieve result: {result}")
+                
+                if hasattr(result, 'content') and result.content:
+                    for content in result.content:
+                        if hasattr(content, 'text'):
+                            print(f"Content: {content.text}")
+                else:
+                    print("No content in result")
+            except asyncio.TimeoutError:
+                print("retrieve function timeout (30s)")
+            except Exception as retrieve_error:
+                print(f"retrieve function failed: {retrieve_error}")
+            
+            print("\n=== MCP Connection Test Complete ===")
 
 if __name__ == "__main__":
     asyncio.run(main())

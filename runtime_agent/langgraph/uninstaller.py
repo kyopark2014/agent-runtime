@@ -54,10 +54,13 @@ def delete_agent_runtime():
         # Get current folder name
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
+        # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
+        runtime_name = repository_name.replace('-', '_')
         
         try:
             client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
             deletion_requested = False
+            actual_runtime_name = None
             
             # If agent_runtime_arn is in config, use it
             if agent_runtime_arn:
@@ -70,6 +73,16 @@ def delete_agent_runtime():
                         client.delete_agent_runtime(agentRuntimeId=runtime_id)
                         print(f"✓ Agent runtime deletion requested: {agent_runtime_arn}")
                         deletion_requested = True
+                        # Get actual runtime name from ARN or list
+                        try:
+                            response = client.list_agent_runtimes()
+                            agent_runtimes = response.get('agentRuntimes', [])
+                            for agent_runtime in agent_runtimes:
+                                if agent_runtime['agentRuntimeId'] == runtime_id:
+                                    actual_runtime_name = agent_runtime['agentRuntimeName']
+                                    break
+                        except:
+                            actual_runtime_name = runtime_name
                     except ClientError as e:
                         if e.response['Error']['Code'] == 'ResourceNotFoundException':
                             print(f"Agent runtime not found (may already be deleted): {agent_runtime_arn}")
@@ -84,8 +97,10 @@ def delete_agent_runtime():
                 agent_runtimes = response.get('agentRuntimes', [])
                 
                 for agent_runtime in agent_runtimes:
-                    if agent_runtime['agentRuntimeName'] == repository_name:
+                    # Try both repository_name and runtime_name (with underscores)
+                    if agent_runtime['agentRuntimeName'] == runtime_name or agent_runtime['agentRuntimeName'] == repository_name:
                         runtime_id = agent_runtime['agentRuntimeId']
+                        actual_runtime_name = agent_runtime['agentRuntimeName']
                         try:
                             client.delete_agent_runtime(agentRuntimeId=runtime_id)
                             print(f"✓ Agent runtime deletion requested: {agent_runtime['agentRuntimeArn']}")
@@ -93,19 +108,21 @@ def delete_agent_runtime():
                             break
                         except ClientError as e:
                             if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                                print(f"Agent runtime not found (may already be deleted): {repository_name}")
+                                print(f"Agent runtime not found (may already be deleted): {actual_runtime_name}")
                                 return True
                             else:
                                 print(f"Error deleting agent runtime: {e}")
                                 return False
                 
                 if not deletion_requested:
-                    print(f"Agent runtime {repository_name} not found (may already be deleted)")
+                    print(f"Agent runtime {runtime_name} (or {repository_name}) not found (may already be deleted)")
                     return True
             
             # Wait for deletion to complete
             if deletion_requested:
-                return wait_for_runtime_deletion(config, repository_name)
+                # Use actual runtime name if available, otherwise use runtime_name
+                name_to_check = actual_runtime_name if actual_runtime_name else runtime_name
+                return wait_for_runtime_deletion(config, name_to_check)
             else:
                 return True
             
@@ -117,14 +134,14 @@ def delete_agent_runtime():
         print(f"Error deleting agent runtime: {e}")
         return False
 
-def wait_for_runtime_deletion(config, repository_name, max_wait_time=600):
+def wait_for_runtime_deletion(config, runtime_name, max_wait_time=600):
     """Wait for AgentCore runtime to be completely deleted (check every 10 seconds)"""
     aws_region = config.get('region')
     if not aws_region:
         print("Error: region not found in config.json")
         return False
     
-    print(f"\nWaiting for AgentCore runtime '{repository_name}' to be deleted...")
+    print(f"\nWaiting for AgentCore runtime '{runtime_name}' to be deleted...")
     print("Checking every 10 seconds...")
     
     client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
@@ -142,18 +159,18 @@ def wait_for_runtime_deletion(config, repository_name, max_wait_time=600):
             # Check if the specific runtime still exists
             runtime_exists = False
             for agent_runtime in agent_runtimes:
-                if agent_runtime['agentRuntimeName'] == repository_name:
+                if agent_runtime['agentRuntimeName'] == runtime_name:
                     runtime_exists = True
                     break
             
             if not runtime_exists:
-                print(f"✓ AgentCore runtime '{repository_name}' has been successfully deleted")
+                print(f"✓ AgentCore runtime '{runtime_name}' has been successfully deleted")
                 print(f"  (Checked {check_count} times, elapsed time: {elapsed_time:.1f} seconds)")
                 return True
             
             # Check timeout
             if elapsed_time >= max_wait_time:
-                print(f"\nTimeout: AgentCore runtime '{repository_name}' still exists after {max_wait_time} seconds")
+                print(f"\nTimeout: AgentCore runtime '{runtime_name}' still exists after {max_wait_time} seconds")
                 print("  Please check manually or try again later")
                 return False
             

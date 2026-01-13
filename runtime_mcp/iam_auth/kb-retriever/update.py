@@ -150,7 +150,7 @@ def update_agent_runtime():
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
         
-        print(f"\n1. Repository name: {repository_name}")
+        print(f"Repository name: {repository_name}")
         
         # Get latest image tag from config (just pushed)
         image_tag = config.get('latest_image_tag')
@@ -185,7 +185,6 @@ def update_agent_runtime():
             return False
         
         # Update agent runtime
-        print("\n2. Updating Agent Runtime...")
         print(f"Updating agent runtime: {repository_name}")
         agent_runtime_arn = update_agent_runtime_func(config, repository_name, agent_runtime_id, image_tag)
         
