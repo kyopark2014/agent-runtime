@@ -54,9 +54,8 @@ def delete_agent_runtime():
         # Get current folder name
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
-        # Convert hyphens to underscores and lowercase for agent runtime name (AWS validation requirement)
-        # Match the naming convention from installer.py: projectName.lower().replace('-', '_')+'_'+target.lower().replace('-', '_')
-        runtime_name = f"{project_name.lower().replace('-', '_')}_{current_folder_name.lower().replace('-', '_')}"
+        # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
+        runtime_name = repository_name.replace('-', '_')
         
         try:
             client = boto3.client('bedrock-agentcore-control', region_name=aws_region)

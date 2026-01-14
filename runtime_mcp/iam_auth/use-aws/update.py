@@ -144,7 +144,8 @@ def update_agent_runtime():
         # Get current folder name
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
-        
+        # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
+        repository_name = repository_name.replace('-', '_')                
         print(f"Repository name: {repository_name}")
         
         # Get latest image tag from config (just pushed)
