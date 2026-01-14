@@ -58,7 +58,8 @@ def push_to_ecr_force():
         print(f"CURRENT_FOLDER_NAME: {current_folder_name}")
         
         # Construct ECR repository name
-        ecr_repository = f"{project_name}_{current_folder_name}"
+        # Convert hyphens to underscores for ECR repository name (AWS validation requirement)
+        ecr_repository = f"{project_name}_{current_folder_name}".replace('-', '_')
         print(f"ECR_REPOSITORY: {ecr_repository}")
         
         # Construct image tag and ECR URI

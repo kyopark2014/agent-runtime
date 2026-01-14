@@ -421,7 +421,7 @@ def delete_iam_resources():
 # ============================================================================
 
 def delete_data_source(config):
-    """Delete Knowledge Base data source"""
+    """Delete Knowledge Base data source and wait for deletion to complete"""
     try:
         aws_region = config.get('region')
         project_name = config.get('projectName')
@@ -457,8 +457,50 @@ def delete_data_source(config):
                     knowledgeBaseId=knowledge_base_id,
                     dataSourceId=data_source_id
                 )
-                print(f"✓ Data source deleted: {data_source_name}")
-                return True
+                print(f"✓ Data source deletion requested: {data_source_name}")
+                
+                # Wait for data source deletion to complete
+                print(f"Waiting for data source '{data_source_name}' to be deleted...")
+                max_wait_time = 300  # 5 minutes
+                start_time = time.time()
+                check_count = 0
+                
+                while True:
+                    check_count += 1
+                    elapsed_time = time.time() - start_time
+                    
+                    try:
+                        response = bedrock_agent.list_data_sources(knowledgeBaseId=knowledge_base_id)
+                        data_sources = response.get('dataSources', [])
+                        
+                        # Check if the data source still exists
+                        data_source_exists = False
+                        for ds in data_sources:
+                            if ds.get('dataSourceId') == data_source_id:
+                                data_source_exists = True
+                                break
+                        
+                        if not data_source_exists:
+                            print(f"✓ Data source '{data_source_name}' has been successfully deleted")
+                            print(f"  (Checked {check_count} times, elapsed time: {elapsed_time:.1f} seconds)")
+                            return True
+                        
+                        # Check timeout
+                        if elapsed_time >= max_wait_time:
+                            print(f"\nTimeout: Data source '{data_source_name}' still exists after {max_wait_time} seconds")
+                            print("  Continuing with next step...")
+                            return True  # Continue even if timeout
+                        
+                        # Wait 5 seconds before next check
+                        if check_count % 6 == 0:  # Print every 30 seconds
+                            print(f"  [{check_count}] Data source still exists, waiting... (elapsed: {elapsed_time:.1f}s)")
+                        time.sleep(5)
+                        
+                    except Exception as e:
+                        # If we can't list data sources, assume it's deleted
+                        print(f"  Could not verify data source status (may be deleted): {e}")
+                        return True
+                
             else:
                 print(f"Data source {data_source_name} not found (may already be deleted)")
                 return True
@@ -479,7 +521,7 @@ def delete_data_source(config):
         return False
 
 def delete_knowledge_base(config):
-    """Delete Knowledge Base"""
+    """Delete Knowledge Base and wait for deletion to complete"""
     try:
         aws_region = config.get('region')
         project_name = config.get('projectName')
@@ -511,8 +553,49 @@ def delete_knowledge_base(config):
         try:
             bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
             bedrock_agent.delete_knowledge_base(knowledgeBaseId=knowledge_base_id)
-            print(f"✓ Knowledge base deleted: {knowledge_base_id}")
-            return True
+            print(f"✓ Knowledge base deletion requested: {knowledge_base_id}")
+            
+            # Wait for knowledge base deletion to complete
+            print(f"Waiting for Knowledge Base '{knowledge_base_id}' to be deleted...")
+            max_wait_time = 600  # 10 minutes
+            start_time = time.time()
+            check_count = 0
+            
+            while True:
+                check_count += 1
+                elapsed_time = time.time() - start_time
+                
+                try:
+                    response = bedrock_agent.list_knowledge_bases(maxResults=50)
+                    knowledge_bases = response.get('knowledgeBaseSummaries', [])
+                    
+                    # Check if the knowledge base still exists
+                    kb_exists = False
+                    for kb in knowledge_bases:
+                        if kb['knowledgeBaseId'] == knowledge_base_id:
+                            kb_exists = True
+                            break
+                    
+                    if not kb_exists:
+                        print(f"✓ Knowledge Base '{knowledge_base_id}' has been successfully deleted")
+                        print(f"  (Checked {check_count} times, elapsed time: {elapsed_time:.1f} seconds)")
+                        return True
+                    
+                    # Check timeout
+                    if elapsed_time >= max_wait_time:
+                        print(f"\nTimeout: Knowledge Base '{knowledge_base_id}' still exists after {max_wait_time} seconds")
+                        print("  Continuing with next step...")
+                        return True  # Continue even if timeout
+                    
+                    # Wait 10 seconds before next check
+                    if check_count % 6 == 0:  # Print every 60 seconds
+                        print(f"  [{check_count}] Knowledge Base still exists, waiting... (elapsed: {elapsed_time:.1f}s)")
+                    time.sleep(10)
+                    
+                except Exception as e:
+                    # If we can't list knowledge bases, assume it's deleted
+                    print(f"  Could not verify Knowledge Base status (may be deleted): {e}")
+                    return True
             
         except ClientError as e:
             if e.response['Error']['Code'] == 'ResourceNotFoundException':
@@ -530,7 +613,7 @@ def delete_knowledge_base(config):
         return False
 
 def delete_s3_vector_index(config):
-    """Delete S3 Vector Index"""
+    """Delete S3 Vector Index and wait for deletion to complete"""
     try:
         aws_region = config.get('region')
         project_name = config.get('projectName')
@@ -552,22 +635,70 @@ def delete_s3_vector_index(config):
             s3vectors_client = boto3.client('s3vectors', region_name=aws_region)
             
             # List indexes to find the index
-            response = s3vectors_client.list_indexes(vectorBucketName=s3_vector_bucket_name)
-            indexes = response.get('indexes', [])
-            
-            index_arn = None
-            for index in indexes:
-                if index.get('indexName') == s3_vector_index_name:
-                    index_arn = index.get('indexArn')
-                    break
-            
-            if index_arn:
-                s3vectors_client.delete_index(indexArn=index_arn)
-                print(f"✓ S3 Vector index deleted: {s3_vector_index_name}")
-                return True
-            else:
-                print(f"S3 Vector index {s3_vector_index_name} not found (may already be deleted)")
-                return True
+            try:
+                response = s3vectors_client.list_indexes(vectorBucketName=s3_vector_bucket_name)
+                indexes = response.get('indexes', [])
+                
+                index_arn = None
+                for index in indexes:
+                    if index.get('indexName') == s3_vector_index_name:
+                        index_arn = index.get('indexArn')
+                        break
+                
+                if index_arn:
+                    s3vectors_client.delete_index(indexArn=index_arn)
+                    print(f"✓ S3 Vector index deletion requested: {s3_vector_index_name}")
+                    
+                    # Wait for index deletion to complete
+                    print(f"Waiting for S3 Vector index '{s3_vector_index_name}' to be deleted...")
+                    max_wait_time = 300  # 5 minutes
+                    start_time = time.time()
+                    check_count = 0
+                    
+                    while True:
+                        check_count += 1
+                        elapsed_time = time.time() - start_time
+                        
+                        try:
+                            response = s3vectors_client.list_indexes(vectorBucketName=s3_vector_bucket_name)
+                            indexes = response.get('indexes', [])
+                            
+                            # Check if the index still exists
+                            index_exists = False
+                            for idx in indexes:
+                                if idx.get('indexArn') == index_arn or idx.get('indexName') == s3_vector_index_name:
+                                    index_exists = True
+                                    break
+                            
+                            if not index_exists:
+                                print(f"✓ S3 Vector index '{s3_vector_index_name}' has been successfully deleted")
+                                print(f"  (Checked {check_count} times, elapsed time: {elapsed_time:.1f} seconds)")
+                                return True
+                            
+                            # Check timeout
+                            if elapsed_time >= max_wait_time:
+                                print(f"\nTimeout: S3 Vector index '{s3_vector_index_name}' still exists after {max_wait_time} seconds")
+                                print("  Continuing with next step...")
+                                return True  # Continue even if timeout
+                            
+                            # Wait 5 seconds before next check
+                            if check_count % 6 == 0:  # Print every 30 seconds
+                                print(f"  [{check_count}] Index still exists, waiting... (elapsed: {elapsed_time:.1f}s)")
+                            time.sleep(5)
+                            
+                        except Exception as e:
+                            # If we can't list indexes, assume it's deleted
+                            print(f"  Could not verify index status (may be deleted): {e}")
+                            return True
+                else:
+                    print(f"S3 Vector index {s3_vector_index_name} not found (may already be deleted)")
+                    return True
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                    print(f"S3 Vector bucket {s3_vector_bucket_name} not found, skipping index deletion")
+                    return True
+                else:
+                    raise
                 
         except ClientError as e:
             if e.response['Error']['Code'] == 'ResourceNotFoundException':
@@ -750,7 +881,7 @@ def delete_s3_bucket(config):
         return False
 
 def delete_knowledge_base_resources():
-    """Delete all Knowledge Base related resources"""
+    """Delete all Knowledge Base related resources created by installer.py"""
     print(f"\n{'='*60}")
     print("Deleting Knowledge Base resources")
     print(f"{'='*60}")
@@ -769,21 +900,25 @@ def delete_knowledge_base_resources():
             return False
         
         # Delete in reverse order of creation (respecting dependencies)
+        # This order ensures that dependent resources are deleted before their dependencies
         steps = [
-            ("Deleting data source", lambda: delete_data_source(config)),
-            ("Deleting knowledge base", lambda: delete_knowledge_base(config)),
-            ("Deleting S3 Vector index", lambda: delete_s3_vector_index(config)),
-            ("Deleting S3 Vector bucket", lambda: delete_s3_vector_bucket(config)),
-            ("Deleting Knowledge Base IAM role", lambda: delete_knowledge_base_role(config)),
-            ("Deleting S3 bucket", lambda: delete_s3_bucket(config)),
+            ("1. Deleting data source", lambda: delete_data_source(config)),
+            ("2. Deleting knowledge base", lambda: delete_knowledge_base(config)),
+            ("3. Deleting S3 Vector index", lambda: delete_s3_vector_index(config)),
+            ("4. Deleting S3 Vector bucket", lambda: delete_s3_vector_bucket(config)),
+            ("5. Deleting Knowledge Base IAM role", lambda: delete_knowledge_base_role(config)),
+            ("6. Deleting S3 bucket", lambda: delete_s3_bucket(config)),
         ]
         
+        success_count = 0
         for step_name, step_func in steps:
             print(f"\n{step_name}...")
-            if not step_func():
+            if step_func():
+                success_count += 1
+            else:
                 print(f"Warning: Failed to complete step '{step_name}'")
         
-        print("\n✓ Knowledge Base resources deletion completed")
+        print(f"\n✓ Knowledge Base resources deletion completed ({success_count}/{len(steps)} steps successful)")
         return True
         
     except Exception as e:
@@ -820,18 +955,24 @@ def main():
         print("Uninstallation cancelled.")
         sys.exit(0)
     
-    # Execute each step in reverse order
+    # Execute each step in reverse order of creation (respecting dependencies)
+    # This ensures that resources that depend on others are deleted first
     steps = [
-        ("Deleting AgentCore runtime", delete_agent_runtime),
-        ("Deleting ECR repository", delete_ecr_repository),
-        ("Deleting Knowledge Base resources", delete_knowledge_base_resources),
-        ("Deleting IAM role and policy", delete_iam_resources),
+        ("1. Deleting AgentCore runtime", delete_agent_runtime),
+        ("2. Deleting ECR repository", delete_ecr_repository),
+        ("3. Deleting Knowledge Base resources", delete_knowledge_base_resources),
+        ("4. Deleting IAM role and policy", delete_iam_resources),
     ]
     
+    success_count = 0
     for step_name, step_func in steps:
-        if not step_func():
+        if step_func():
+            success_count += 1
+        else:
             print(f"\nWarning: Error occurred in step '{step_name}'.")
-            print("   Continuing with remaining steps...")    
+            print("   Continuing with remaining steps...")
+    
+    print(f"\nCompleted {success_count}/{len(steps)} main steps")    
 
     # Output final results
     print("\n" + "="*60)
