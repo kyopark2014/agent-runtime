@@ -83,6 +83,66 @@ def get_sigv4_headers(method: str, url: str, body: bytes = None, region: str = N
     
     return signed_headers
 
+# Create a custom httpx event hook that signs requests with SigV4
+async def sign_request(request: httpx.Request) -> None:
+    """Sign the request with AWS SigV4 including the body"""
+    # Get credentials
+    boto_session = boto3.Session()
+    credentials = boto_session.get_credentials().get_frozen_credentials()
+    
+    # Parse URL
+    parsed_url = urlparse(str(request.url))
+    host = parsed_url.netloc
+    
+    # Generate timestamp
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    
+    # Read request body if available
+    body = None
+    if request.content:
+        if isinstance(request.content, bytes):
+            body = request.content
+        else:
+            # Try to read the body asynchronously
+            try:
+                body = await request.aread()
+                # Reset the stream so it can be read again
+                if hasattr(request, '_content'):
+                    request._content = body
+            except Exception:
+                # If we can't read the body, sign without it
+                pass
+    
+    # Create AWS request headers
+    aws_headers = {
+        'host': host,
+        'x-amz-date': timestamp,
+        'Content-Type': request.headers.get('Content-Type', 'application/json'),
+        'Accept': request.headers.get('Accept', 'application/json, text/event-stream')
+    }
+    
+    if body:
+        aws_headers['Content-Length'] = str(len(body))
+    
+    # Create AWS request for signing
+    aws_request = AWSRequest(
+        method=request.method,
+        url=str(request.url),
+        headers=aws_headers,
+        data=body
+    )
+    
+    # Sign the request
+    auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
+    auth.add_auth(aws_request)
+    
+    # Update request headers
+    request.headers['X-Amz-Date'] = timestamp
+    request.headers['Authorization'] = aws_request.headers['Authorization']
+    
+    if credentials.token:
+        request.headers['X-Amz-Security-Token'] = credentials.token
+
 async def main():
     agent_arn = config['agent_runtime_arn']
     region = config['region']
@@ -150,67 +210,7 @@ async def main():
         
         # Now try the MCP connection with better error handling
         print("1. Attempting streamable_http_client connection...")
-        
-        # Create a custom httpx event hook that signs requests with SigV4
-        async def sign_request(request: httpx.Request) -> None:
-            """Sign the request with AWS SigV4 including the body"""
-            # Get credentials
-            boto_session = boto3.Session()
-            credentials = boto_session.get_credentials().get_frozen_credentials()
-            
-            # Parse URL
-            parsed_url = urlparse(str(request.url))
-            host = parsed_url.netloc
-            
-            # Generate timestamp
-            timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
-            
-            # Read request body if available
-            body = None
-            if request.content:
-                if isinstance(request.content, bytes):
-                    body = request.content
-                else:
-                    # Try to read the body asynchronously
-                    try:
-                        body = await request.aread()
-                        # Reset the stream so it can be read again
-                        if hasattr(request, '_content'):
-                            request._content = body
-                    except Exception:
-                        # If we can't read the body, sign without it
-                        pass
-            
-            # Create AWS request headers
-            aws_headers = {
-                'host': host,
-                'x-amz-date': timestamp,
-                'Content-Type': request.headers.get('Content-Type', 'application/json'),
-                'Accept': request.headers.get('Accept', 'application/json, text/event-stream')
-            }
-            
-            if body:
-                aws_headers['Content-Length'] = str(len(body))
-            
-            # Create AWS request for signing
-            aws_request = AWSRequest(
-                method=request.method,
-                url=str(request.url),
-                headers=aws_headers,
-                data=body
-            )
-            
-            # Sign the request
-            auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
-            auth.add_auth(aws_request)
-            
-            # Update request headers
-            request.headers['X-Amz-Date'] = timestamp
-            request.headers['Authorization'] = aws_request.headers['Authorization']
-            
-            if credentials.token:
-                request.headers['X-Amz-Security-Token'] = credentials.token
-        
+                
         # Use event hooks for signing
         http_client = httpx.AsyncClient(
             timeout=120.0,
