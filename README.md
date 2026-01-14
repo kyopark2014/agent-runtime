@@ -53,7 +53,7 @@ response = client.create_agent_runtime(
 print(f"✓ Agent runtime created: {response['agentRuntimeArn']}")
 ```
 
-Agent에서 MCP server로 요청을 보낼때에는 아래와 같이 IAM 인증을 수행하기 위하여 request에 X-Amz-Security-Token을 포함합니다. 상세코드는 [agent.py](https://github.com/kyopark2014/agent-runtime/blob/main/runtime_agent/langgraph/agent.py)을 참조합니다.
+Agent에서 MCP server로 요청을 보낼때에는 아래와 같이 IAM 인증을 수행하기 위하여 request에 X-Amz-Security-Token을 포함합니다. 이를 위해 httpx의 event hook을 이용해 아래와 같이 구현할 수 있습니다. 상세코드는 [agent.py](https://github.com/kyopark2014/agent-runtime/blob/main/runtime_agent/langgraph/agent.py)을 참조합니다.
 
 ```python
 original_init = httpx.AsyncClient.__init__
