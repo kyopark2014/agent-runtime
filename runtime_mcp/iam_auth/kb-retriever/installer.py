@@ -11,11 +11,10 @@ import os
 import json
 import shutil
 import base64
-import time
-from datetime import datetime
 import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
 import logging
+from datetime import datetime
+from botocore.exceptions import ClientError, NoCredentialsError
 
 # Setup logging for Knowledge Base functions
 logging.basicConfig(
@@ -32,7 +31,6 @@ config_path = os.path.join(script_dir, "config.json")
 
 # Import s3vector module for Knowledge Base creation
 sys.path.insert(0, script_dir)
-import s3vector
 
 def load_config():
     """Load config.json file."""
@@ -45,7 +43,7 @@ def load_config():
         session = boto3.Session()
         region = session.region_name
         config['region'] = region
-        config['projectName'] = "es-us"
+        config['projectName'] = "agent-runtime"
         
         sts = boto3.client("sts")
         response = sts.get_caller_identity()
@@ -54,6 +52,7 @@ def load_config():
         
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
+        pass
     
     return config
 
@@ -604,6 +603,7 @@ def create_bucket(bucket_name, region):
         logger.info(f"bucket_name: {bucket_name} is already exists.")
 
 def setup_knowledge_base(config):
+    import s3vector
     """Setup Knowledge Base if needed - uses s3vector.create_knowledge_base"""
     aws_region = config.get('region')
     project_name = config.get('projectName')

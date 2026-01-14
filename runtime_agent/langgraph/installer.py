@@ -29,7 +29,7 @@ def load_config():
         session = boto3.Session()
         region = session.region_name
         config['region'] = region
-        config['projectName'] = "es-us"
+        config['projectName'] = "agent-runtime"
         
         sts = boto3.client("sts")
         response = sts.get_caller_identity()
@@ -622,7 +622,8 @@ def create_agent_runtime_func(config, repository_name, image_tag):
         print("Error: agent_runtime_role not found in config.json")
         return None
     
-    runtime_name = repository_name
+    # Replace hyphens with underscores for agent runtime name (AWS validation requirement)
+    runtime_name = repository_name.replace('-', '_')
     print(f"Creating agent runtime: {runtime_name}")
     
     try:
@@ -703,7 +704,11 @@ def create_agent_runtime():
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
         
+        # Replace hyphens with underscores for agent runtime name (AWS validation requirement)
+        runtime_name = repository_name.replace('-', '_')
+        
         print(f"Repository name: {repository_name}")
+        print(f"Runtime name: {runtime_name}")
         
         # Get latest image tag
         image_tag = get_latest_image_tag(config)
@@ -722,18 +727,18 @@ def create_agent_runtime():
         agent_runtime_id = None
         
         for agent_runtime in agent_runtimes:
-            if agent_runtime['agentRuntimeName'] == repository_name:
-                print(f"Agent runtime {repository_name} already exists")
+            if agent_runtime['agentRuntimeName'] == runtime_name:
+                print(f"Agent runtime {runtime_name} already exists")
                 is_exist = True
                 agent_runtime_id = agent_runtime['agentRuntimeId']
                 break
         
         # Create or update agent runtime
         if is_exist:
-            print(f"Updating agent runtime: {repository_name}")
+            print(f"Updating agent runtime: {runtime_name}")
             agent_runtime_arn = update_agent_runtime_func(config, repository_name, agent_runtime_id, image_tag)
         else:
-            print(f"Creating agent runtime: {repository_name}")
+            print(f"Creating agent runtime: {runtime_name}")
             agent_runtime_arn = create_agent_runtime_func(config, repository_name, image_tag)
         
         if not agent_runtime_arn:

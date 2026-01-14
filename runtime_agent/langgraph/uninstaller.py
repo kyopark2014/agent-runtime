@@ -97,8 +97,8 @@ def delete_agent_runtime():
                 agent_runtimes = response.get('agentRuntimes', [])
                 
                 for agent_runtime in agent_runtimes:
-                    # Try both repository_name and runtime_name (with underscores)
-                    if agent_runtime['agentRuntimeName'] == runtime_name or agent_runtime['agentRuntimeName'] == repository_name:
+                    # Use runtime_name (with underscores) for comparison
+                    if agent_runtime['agentRuntimeName'] == runtime_name:
                         runtime_id = agent_runtime['agentRuntimeId']
                         actual_runtime_name = agent_runtime['agentRuntimeName']
                         try:
@@ -115,7 +115,7 @@ def delete_agent_runtime():
                                 return False
                 
                 if not deletion_requested:
-                    print(f"Agent runtime {runtime_name} (or {repository_name}) not found (may already be deleted)")
+                    print(f"Agent runtime {runtime_name} not found (may already be deleted)")
                     return True
             
             # Wait for deletion to complete

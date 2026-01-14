@@ -54,7 +54,7 @@ def setup_logging(log_level=logging.INFO):
         datefmt=date_format,
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler(f"installer_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+            # logging.FileHandler(f"installer_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
         ]
     )
     

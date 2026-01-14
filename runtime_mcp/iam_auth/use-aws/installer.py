@@ -40,7 +40,7 @@ def load_config():
         session = boto3.Session()
         region = session.region_name
         config['region'] = region
-        config['projectName'] = "es-us"
+        config['projectName'] = "agent-runtime"
         
         sts = boto3.client("sts")
         response = sts.get_caller_identity()

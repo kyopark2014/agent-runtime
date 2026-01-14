@@ -149,8 +149,11 @@ def update_agent_runtime():
         # Get current folder name
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
+        # Replace hyphens with underscores for agent runtime name (AWS validation requirement)
+        runtime_name = repository_name.replace('-', '_')
         
         print(f"\n1. Repository name: {repository_name}")
+        print(f"Runtime name: {runtime_name}")
         
         # Get latest image tag from config (just pushed)
         image_tag = config.get('latest_image_tag')
@@ -173,20 +176,20 @@ def update_agent_runtime():
         agent_runtime_id = None
         
         for agent_runtime in agent_runtimes:
-            if agent_runtime['agentRuntimeName'] == repository_name:
-                print(f"Agent runtime {repository_name} found")
+            if agent_runtime['agentRuntimeName'] == runtime_name:
+                print(f"Agent runtime {runtime_name} found")
                 is_exist = True
                 agent_runtime_id = agent_runtime['agentRuntimeId']
                 break
         
         if not is_exist:
-            print(f"Error: Agent runtime {repository_name} does not exist")
+            print(f"Error: Agent runtime {runtime_name} does not exist")
             print("Please create it first using installer.py")
             return False
         
         # Update agent runtime
         print("\n2. Updating Agent Runtime...")
-        print(f"Updating agent runtime: {repository_name}")
+        print(f"Updating agent runtime: {runtime_name}")
         agent_runtime_arn = update_agent_runtime_func(config, repository_name, agent_runtime_id, image_tag)
         
         if not agent_runtime_arn:

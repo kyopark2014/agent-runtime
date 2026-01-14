@@ -53,7 +53,7 @@ def create_bucket(bucket_name, region):
         logger.info(f"bucket_name: {bucket_name} is already exists.")
 
 # Bucket for Knowledge Base
-bucket_name = config.get("bucket_name", "")
+bucket_name = config.get("bucket_name")
 print(f"bucket_name: {bucket_name}")
 
 if not bucket_name:
@@ -240,7 +240,11 @@ def create_knowledge_base(knowledge_base_name, region):
 
     # Create knowledge base
     # parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-7-sonnet-20250219-v1:0"
-    parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+    # parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+    account_id = config.get('accountId')
+    if not account_id:
+        raise ValueError("account_id is not found")
+    parsingModelArn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
     embeddingModelArn = f"arn:aws:bedrock:{region}::foundation-model/amazon.titan-embed-text-v2:0"
 
     knowledge_base_name = projectName
