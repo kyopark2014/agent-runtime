@@ -13,6 +13,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("retrieve")
 
+# Suppress boto3/botocore internal warnings about response ID normalization
+# This warning occurs when boto3 processes responses and is generally harmless
+logging.getLogger('botocore').setLevel(logging.ERROR)
+logging.getLogger('boto3').setLevel(logging.ERROR)
+logging.getLogger('urllib3').setLevel(logging.ERROR)
+
 def load_config():
     config = None
     script_dir = os.path.dirname(os.path.abspath(__file__))

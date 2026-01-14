@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Agent Docker Build Script (with ARG credentials)
-echo "🚀 Agent Docker Build Script (with ARG credentials)"
+echo "Agent Docker Build Script (with ARG credentials)"
 echo "=========================================================="
 
 # Get AWS credentials from local AWS CLI configuration
@@ -27,9 +27,10 @@ fi
 
 # Build Docker image with build arguments
 echo ""
-echo "🔨 Building Docker image with ARG credentials..."
+echo "Building Docker image with ARG credentials..."
 sudo docker build \
     --platform linux/arm64 \
+    -f Dockerfile.local \
     --build-arg AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
     --build-arg AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
     --build-arg AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
@@ -37,15 +38,15 @@ sudo docker build \
     -t ${DOCKER_NAME}:latest .
 
 if [ $? -eq 0 ]; then
-    echo "✅ Docker image built successfully with embedded credentials"
+    echo "Docker image built successfully with embedded credentials"
     echo ""
-    echo "🚀 To run the container:"
+    echo "To run the container:"
     echo "   sudo docker run -d --name ${DOCKER_NAME} -p 8080:8080 ${DOCKER_NAME}:latest"
     echo ""
-    echo "⚠️  Note: AWS credentials are embedded in the Docker image"
+    echo "Note: AWS credentials are embedded in the Docker image"
     echo "   - Do not share this image publicly"
     echo "   - For production, use environment variables or IAM roles"
 else
-    echo "❌ Docker build failed"
+    echo "Docker build failed"
     exit 1
 fi 

@@ -1,3 +1,14 @@
+# Docker build artifacts
+Dockerfile.local
+build-docker.sh
+run-docker.sh
+installer.py
+uninstaller.py
+update.py
+test_mcp_local.py
+test_mcp_remote.py
+test_mcp_tool_local.py
+
 # Build artifacts
 build/
 dist/

@@ -53,7 +53,7 @@ def create_bucket(bucket_name, region):
         logger.info(f"bucket_name: {bucket_name} is already exists.")
 
 # Bucket for Knowledge Base
-bucket_name = config.get("bucket_name", "")
+bucket_name = config.get("bucket_name")
 print(f"bucket_name: {bucket_name}")
 
 if not bucket_name:
@@ -240,67 +240,54 @@ def create_knowledge_base(knowledge_base_name, region):
 
     # Create knowledge base
     # parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-7-sonnet-20250219-v1:0"
-    parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+    # parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+    account_id = config.get('accountId')
+    if not account_id:
+        raise ValueError("account_id is not found")
+    parsingModelArn = f"arn:aws:bedrock:{region}:{account_id}:inference-profile/global.anthropic.claude-haiku-4-5-20251001-v1:0"
     embeddingModelArn = f"arn:aws:bedrock:{region}::foundation-model/amazon.titan-embed-text-v2:0"
 
     knowledge_base_name = projectName
-    knowledge_base_id = config.get('knowledge_base_id', "")
-    logger.info(f"knowledge_base_id: {knowledge_base_id}")  
-    if not knowledge_base_id:
-        bedrock_agent = boto3.client('bedrock-agent', region_name=region)
-        response = bedrock_agent.list_knowledge_bases(maxResults=50)
-        knowledge_bases = response.get('knowledgeBaseSummaries', [])
-        if not any(knowledge_base['name'] == knowledge_base_name for knowledge_base in knowledge_bases):
-            logger.info(f"knowledge_base_name: {knowledge_base_name} is not exists.")
-            response = bedrock_agent.create_knowledge_base(
-                name=knowledge_base_name,
-                description=f"Knowledge base for {projectName} using s3 vector",
-                roleArn=role_arn,
-                knowledgeBaseConfiguration={
-                    "type": "VECTOR",
-                    "vectorKnowledgeBaseConfiguration": {
-                        "embeddingModelArn": embeddingModelArn, 
-                        "embeddingModelConfiguration": {
-                            "bedrockEmbeddingModelConfiguration": {
-                                "dimensions": 1024,
-                                "embeddingDataType": "FLOAT32"
-                            }
-                        },
-                        "supplementalDataStorageConfiguration": {
-                            "storageLocations": [
-                                {
-                                    "s3Location": {
-                                        "uri": f"s3://{bucket_name}"
-                                    },
-                                    "type": "S3"
-                                }
-                            ]
-                        }
+        
+    bedrock_agent = boto3.client('bedrock-agent', region_name=region)
+    response = bedrock_agent.create_knowledge_base(
+        name=knowledge_base_name,
+        description=f"Knowledge base for {projectName} using s3 vector",
+        roleArn=role_arn,
+        knowledgeBaseConfiguration={
+            "type": "VECTOR",
+            "vectorKnowledgeBaseConfiguration": {
+                "embeddingModelArn": embeddingModelArn, 
+                "embeddingModelConfiguration": {
+                    "bedrockEmbeddingModelConfiguration": {
+                        "dimensions": 1024,
+                        "embeddingDataType": "FLOAT32"
                     }
                 },
-                storageConfiguration={
-                    "type": "S3_VECTORS",
-                    "s3VectorsConfiguration": {
-                        "vectorBucketArn": s3_vector_bucket_arn,
-                        "indexArn": s3_vector_index_arn
-                    }
+                "supplementalDataStorageConfiguration": {
+                    "storageLocations": [
+                        {
+                            "s3Location": {
+                                "uri": f"s3://{bucket_name}"
+                            },
+                            "type": "S3"
+                        }
+                    ]
                 }
-            )
-            # Extract the actual knowledge base ID from the response
-            knowledge_base_id = response['knowledgeBase']['knowledgeBaseId']
-            config['knowledge_base_id'] = knowledge_base_id
-            logger.info(f"knowledge_base_id: {knowledge_base_id}")
-
-        else:
-            logger.info(f"knowledge_base_name: {knowledge_base_name} is already exists.")
-            for knowledge_base in knowledge_bases:
-                if knowledge_base['name'] == knowledge_base_name:
-                    knowledge_base_id = knowledge_base['knowledgeBaseId']
-                    config['knowledge_base_id'] = knowledge_base_id
-                    logger.info(f"knowledge_base_id: {knowledge_base_id}")
-                    break
-    else:
-        logger.info(f"knowledge_base_id: {knowledge_base_id} is already exists.")
+            }
+        },
+        storageConfiguration={
+            "type": "S3_VECTORS",
+            "s3VectorsConfiguration": {
+                "vectorBucketArn": s3_vector_bucket_arn,
+                "indexArn": s3_vector_index_arn
+            }
+        }
+    )
+    # Extract the actual knowledge base ID from the response
+    knowledge_base_id = response['knowledgeBase']['knowledgeBaseId']
+    config['knowledge_base_id'] = knowledge_base_id
+    logger.info(f"knowledge_base_id: {knowledge_base_id}")
 
     # data source of knowledge base 
     data_source_name = config.get('data_source_name', "")

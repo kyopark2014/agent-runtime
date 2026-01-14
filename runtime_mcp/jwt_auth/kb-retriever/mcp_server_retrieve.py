@@ -13,6 +13,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger("retrieve-server")
 
+# Suppress boto3/botocore internal warnings about response ID normalization
+# This warning occurs when boto3 processes responses and is generally harmless
+logging.getLogger('botocore').setLevel(logging.ERROR)
+logging.getLogger('boto3').setLevel(logging.ERROR)
+logging.getLogger('urllib3').setLevel(logging.ERROR)
+
 try:
     mcp = FastMCP(
         name = "mcp-retrieve",
@@ -51,7 +57,6 @@ def retrieve(keyword: str) -> str:
         return f"Error retrieving data: {str(e)}"
 
 if __name__ =="__main__":
-    print(f"###### main ######")
     mcp.run(transport="streamable-http")
 
 
