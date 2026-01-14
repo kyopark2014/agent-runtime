@@ -24,6 +24,159 @@ AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.
 
 ## Runtime Agent
 
+## Runtime MCP
+
+MCP 서버를 AgentCore runtime으로 배포하면 서비리스 기반으로 효율적으로 인프라를 관리하고 인증/보안과 같은 이슈도 쉽게 해결할 수 있습니다.
+
+현재 runtime은 IAM과 JWT token 방식의 인증을 제공합니다.
+
+
+### IAM 인증
+
+Agent가 MCP server에 요청을 보낼때 IAM 인증을 수행합니다. [create_agent_runtime](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-agentcore-control/client/create_agent_runtime.html)에서 authorizerConfiguration을 포함하지 않은 경우에 IAM으로 인증하게 됩니다. Runtime 생성시 client는 bedrock-agentcore-control을 사용하고 MCP server에 대한 ECR 경로를 가지고 있어야 합니다. 상세한 코드는 [installer.py](https://github.com/kyopark2014/agent-runtime/blob/main/runtime_mcp/iam_auth/kb-retriever/installer.py)을 참조합니다.
+
+```python
+client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
+
+response = client.create_agent_runtime(
+    agentRuntimeName=runtime_name,
+    agentRuntimeArtifact={
+        'containerConfiguration': {
+            'containerUri': f"{account_id}.dkr.ecr.{aws_region}.amazonaws.com/{repository_name}:{image_tag}"
+        }
+    },
+    networkConfiguration={"networkMode": "PUBLIC"}, 
+    roleArn=agent_runtime_role,
+    protocolConfiguration={"serverProtocol": "MCP"}
+)
+
+print(f"✓ Agent runtime created: {response['agentRuntimeArn']}")
+```
+
+Agent에서 MCP server로 요청을 보낼때에는 아래와 같이 IAM 인증을 수행하기 위하여 request에 X-Amz-Security-Token을 포함합니다. 상세코드는 [agent.py](https://github.com/kyopark2014/agent-runtime/blob/main/runtime_agent/langgraph/agent.py)을 참조합니다.
+
+```python
+original_init = httpx.AsyncClient.__init__
+def patched_init(self, *args, **kwargs):
+    # Add SigV4 signing event hook if needed
+    async def sign_request(request: httpx.Request) -> None:
+        """Sign the request with AWS SigV4 including the body"""
+        # Only sign requests to bedrock-agentcore
+        if "bedrock-agentcore" not in str(request.url):
+            return
+        
+        # Get credentials
+        boto_session = boto3.Session()
+        credentials = boto_session.get_credentials().get_frozen_credentials()
+        
+        # Parse URL
+        parsed_url = urlparse(str(request.url))
+        host = parsed_url.netloc
+        
+        # Generate timestamp
+        timestamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        
+        # Read request body if available
+        body = None
+        if request.content:
+            if isinstance(request.content, bytes):
+                body = request.content
+            else:
+                try:
+                    body = await request.aread()
+                    if hasattr(request, '_content'):
+                        request._content = body
+                except Exception:
+                    pass
+        
+        # Create AWS request headers
+        aws_headers = {
+            'host': host,
+            'x-amz-date': timestamp,
+            'Content-Type': request.headers.get('Content-Type', 'application/json'),
+            'Accept': request.headers.get('Accept', 'application/json, text/event-stream')
+        }
+        
+        if body:
+            aws_headers['Content-Length'] = str(len(body))
+        
+        # Create AWS request for signing
+        aws_request = AWSRequest(
+            method=request.method,
+            url=str(request.url),
+            headers=aws_headers,
+            data=body
+        )
+        
+        # Sign the request
+        region = utils.load_config().get("region", "us-west-2")
+        auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
+        auth.add_auth(aws_request)
+        
+        # Update request headers
+        request.headers['X-Amz-Date'] = timestamp
+        request.headers['Authorization'] = aws_request.headers['Authorization']
+        
+        if credentials.token:
+            request.headers['X-Amz-Security-Token'] = credentials.token
+    
+    # Add event_hooks to kwargs if not already present
+    if 'event_hooks' not in kwargs:
+        kwargs['event_hooks'] = {'request': [], 'response': []}
+    elif not isinstance(kwargs['event_hooks'], dict):
+        kwargs['event_hooks'] = {'request': [], 'response': []}
+    
+    if 'request' not in kwargs['event_hooks']:
+        kwargs['event_hooks']['request'] = []
+    
+    # Add the sign_request hook
+    kwargs['event_hooks']['request'].append(sign_request)
+
+    # Call original init with modified kwargs
+    original_init(self, *args, **kwargs)
+```
+
+그리고 이를 tool을 실행할때 사용합니다.  
+
+```python
+import httpx
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+
+app = BedrockAgentCoreApp()
+
+@app.entrypoint
+async def agent_langgraph(payload):
+    httpx.AsyncClient.__init__ = patched_init
+    
+    client = MultiServerMCPClient(server_params)
+    tools = await client.get_tools()
+    
+    app = langgraph_agent.buildChatAgentWithHistory(tools)
+    config = {
+        "recursion_limit": 50,
+        "configurable": {"thread_id": user_id},
+        "tools": tools,
+        "system_prompt": None
+    }
+    
+    inputs = {"messages": [HumanMessage(content=query)]}
+            
+    value = final_output = None
+    async for output in app.astream(inputs, config):
+        for key, value in output.items():
+            logger.info(f"--> key: {key}, value: {value}")
+
+            if key == "messages" or key == "agent":
+                if isinstance(value, dict) and "messages" in value:
+                    final_output = value
+                elif isinstance(value, list):
+                    final_output = {"messages": value, "image_url": []}
+                else:
+                    final_output = {"messages": [value], "image_url": []}
+```
+
+
+
 ### AgentCore Runtime으로 Agent 배포하기
 
 LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./runtime/langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./runtime/langgraph/push-to-ecr.sh)를 이용하면 손쉽게 배포할 수 있습니다.
