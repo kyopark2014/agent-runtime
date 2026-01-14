@@ -9,6 +9,7 @@ import sys
 import os
 from datetime import datetime
 import boto3
+from botocore.exceptions import ClientError, NoCredentialsError
 
 # Import functions from installer.py
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -28,8 +29,7 @@ from installer import (
     run_docker_command,
     get_latest_image_tag,
     update_agentcore_json,
-    update_agent_runtime_func,
-    create_agent_runtime_func
+    update_agent_runtime_func
 )
 
 def push_to_ecr_force():

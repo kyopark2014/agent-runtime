@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Unified uninstallation script
-Sequentially deletes: AgentCore runtime -> ECR repository -> Knowledge Base resources -> IAM role -> IAM policy
+Sequentially deletes: AgentCore runtime -> ECR repository -> IAM role -> IAM policy
 All functionality integrated into a single file
 """
 
@@ -54,8 +54,9 @@ def delete_agent_runtime():
         # Get current folder name
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
-        # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
-        runtime_name = repository_name.replace('-', '_')
+        # Convert hyphens to underscores and lowercase for agent runtime name (AWS validation requirement)
+        # Match the naming convention from installer.py: projectName.lower().replace('-', '_')+'_'+target.lower().replace('-', '_')
+        runtime_name = f"{project_name.lower().replace('-', '_')}_{current_folder_name.lower().replace('-', '_')}"
         
         try:
             client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
@@ -97,8 +98,8 @@ def delete_agent_runtime():
                 agent_runtimes = response.get('agentRuntimes', [])
                 
                 for agent_runtime in agent_runtimes:
-                    # Try both repository_name and runtime_name (with underscores)
-                    if agent_runtime['agentRuntimeName'] == runtime_name or agent_runtime['agentRuntimeName'] == repository_name:
+                    # Match by runtime name (installer creates with lowercase and underscores)
+                    if agent_runtime['agentRuntimeName'] == runtime_name:
                         runtime_id = agent_runtime['agentRuntimeId']
                         actual_runtime_name = agent_runtime['agentRuntimeName']
                         try:
@@ -115,7 +116,7 @@ def delete_agent_runtime():
                                 return False
                 
                 if not deletion_requested:
-                    print(f"Agent runtime {runtime_name} (or {repository_name}) not found (may already be deleted)")
+                    print(f"Agent runtime {runtime_name} not found (may already be deleted)")
                     return True
             
             # Wait for deletion to complete
@@ -417,380 +418,6 @@ def delete_iam_resources():
         return False
 
 # ============================================================================
-# Knowledge Base Deletion Functions
-# ============================================================================
-
-def delete_data_source(config):
-    """Delete Knowledge Base data source"""
-    try:
-        aws_region = config.get('region')
-        project_name = config.get('projectName')
-        knowledge_base_id = config.get('knowledge_base_id')
-        data_source_name = config.get('data_source_name')
-        
-        if not all([aws_region, project_name]):
-            print("Error: Missing required configuration in config.json")
-            return False
-        
-        if not knowledge_base_id:
-            print("Knowledge base ID not found in config.json, skipping data source deletion")
-            return True
-        
-        if not data_source_name:
-            data_source_name = f"data-source-for-{project_name}-{aws_region}"
-        
-        try:
-            bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
-            
-            # List data sources to find the data source ID
-            response = bedrock_agent.list_data_sources(knowledgeBaseId=knowledge_base_id)
-            data_sources = response.get('dataSources', [])
-            
-            data_source_id = None
-            for data_source in data_sources:
-                if data_source.get('dataSourceName') == data_source_name:
-                    data_source_id = data_source.get('dataSourceId')
-                    break
-            
-            if data_source_id:
-                bedrock_agent.delete_data_source(
-                    knowledgeBaseId=knowledge_base_id,
-                    dataSourceId=data_source_id
-                )
-                print(f"✓ Data source deleted: {data_source_name}")
-                return True
-            else:
-                print(f"Data source {data_source_name} not found (may already be deleted)")
-                return True
-                
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                print(f"Data source {data_source_name} not found (may already be deleted)")
-                return True
-            else:
-                print(f"Error deleting data source: {e}")
-                return False
-        except Exception as e:
-            print(f"Error deleting data source: {e}")
-            return False
-            
-    except Exception as e:
-        print(f"Error deleting data source: {e}")
-        return False
-
-def delete_knowledge_base(config):
-    """Delete Knowledge Base"""
-    try:
-        aws_region = config.get('region')
-        project_name = config.get('projectName')
-        knowledge_base_id = config.get('knowledge_base_id')
-        
-        if not all([aws_region, project_name]):
-            print("Error: Missing required configuration in config.json")
-            return False
-        
-        if not knowledge_base_id:
-            # Try to find by name
-            knowledge_base_name = project_name
-            try:
-                bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
-                response = bedrock_agent.list_knowledge_bases(maxResults=50)
-                knowledge_bases = response.get('knowledgeBaseSummaries', [])
-                
-                for kb in knowledge_bases:
-                    if kb['name'] == knowledge_base_name:
-                        knowledge_base_id = kb['knowledgeBaseId']
-                        break
-            except Exception as e:
-                print(f"Warning: Could not find knowledge base by name: {e}")
-        
-        if not knowledge_base_id:
-            print("Knowledge base ID not found in config.json, skipping knowledge base deletion")
-            return True
-        
-        try:
-            bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
-            bedrock_agent.delete_knowledge_base(knowledgeBaseId=knowledge_base_id)
-            print(f"✓ Knowledge base deleted: {knowledge_base_id}")
-            return True
-            
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                print(f"Knowledge base {knowledge_base_id} not found (may already be deleted)")
-                return True
-            else:
-                print(f"Error deleting knowledge base: {e}")
-                return False
-        except Exception as e:
-            print(f"Error deleting knowledge base: {e}")
-            return False
-            
-    except Exception as e:
-        print(f"Error deleting knowledge base: {e}")
-        return False
-
-def delete_s3_vector_index(config):
-    """Delete S3 Vector Index"""
-    try:
-        aws_region = config.get('region')
-        project_name = config.get('projectName')
-        account_id = config.get('accountId')
-        s3_vector_bucket_name = config.get('s3_vector_bucket_name')
-        s3_vector_index_name = config.get('s3_vector_index_name')
-        
-        if not all([aws_region, project_name, account_id]):
-            print("Error: Missing required configuration in config.json")
-            return False
-        
-        if not s3_vector_bucket_name:
-            s3_vector_bucket_name = f"s3-vector-for-{project_name}-{account_id}-{aws_region}"
-        
-        if not s3_vector_index_name:
-            s3_vector_index_name = f"s3-vector-index-for-{project_name}-{account_id}-{aws_region}"
-        
-        try:
-            s3vectors_client = boto3.client('s3vectors', region_name=aws_region)
-            
-            # List indexes to find the index
-            response = s3vectors_client.list_indexes(vectorBucketName=s3_vector_bucket_name)
-            indexes = response.get('indexes', [])
-            
-            index_arn = None
-            for index in indexes:
-                if index.get('indexName') == s3_vector_index_name:
-                    index_arn = index.get('indexArn')
-                    break
-            
-            if index_arn:
-                s3vectors_client.delete_index(indexArn=index_arn)
-                print(f"✓ S3 Vector index deleted: {s3_vector_index_name}")
-                return True
-            else:
-                print(f"S3 Vector index {s3_vector_index_name} not found (may already be deleted)")
-                return True
-                
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                print(f"S3 Vector index {s3_vector_index_name} not found (may already be deleted)")
-                return True
-            else:
-                print(f"Error deleting S3 Vector index: {e}")
-                return False
-        except Exception as e:
-            print(f"Error deleting S3 Vector index: {e}")
-            return False
-            
-    except Exception as e:
-        print(f"Error deleting S3 Vector index: {e}")
-        return False
-
-def delete_s3_vector_bucket(config):
-    """Delete S3 Vector Bucket"""
-    try:
-        aws_region = config.get('region')
-        project_name = config.get('projectName')
-        account_id = config.get('accountId')
-        s3_vector_bucket_name = config.get('s3_vector_bucket_name')
-        
-        if not all([aws_region, project_name, account_id]):
-            print("Error: Missing required configuration in config.json")
-            return False
-        
-        if not s3_vector_bucket_name:
-            s3_vector_bucket_name = f"s3-vector-for-{project_name}-{account_id}-{aws_region}"
-        
-        try:
-            s3vectors_client = boto3.client('s3vectors', region_name=aws_region)
-            
-            # List vector buckets to find the bucket ARN
-            response = s3vectors_client.list_vector_buckets(maxResults=50)
-            vector_buckets = response.get('vectorBuckets', [])
-            
-            bucket_arn = None
-            for bucket in vector_buckets:
-                if bucket.get('vectorBucketName') == s3_vector_bucket_name:
-                    bucket_arn = bucket.get('vectorBucketArn')
-                    break
-            
-            if bucket_arn:
-                s3vectors_client.delete_vector_bucket(vectorBucketArn=bucket_arn)
-                print(f"✓ S3 Vector bucket deleted: {s3_vector_bucket_name}")
-                return True
-            else:
-                print(f"S3 Vector bucket {s3_vector_bucket_name} not found (may already be deleted)")
-                return True
-                
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
-                print(f"S3 Vector bucket {s3_vector_bucket_name} not found (may already be deleted)")
-                return True
-            else:
-                print(f"Error deleting S3 Vector bucket: {e}")
-                return False
-        except Exception as e:
-            print(f"Error deleting S3 Vector bucket: {e}")
-            return False
-            
-    except Exception as e:
-        print(f"Error deleting S3 Vector bucket: {e}")
-        return False
-
-def delete_knowledge_base_role(config):
-    """Delete Knowledge Base IAM role and inline policy"""
-    try:
-        aws_region = config.get('region')
-        project_name = config.get('projectName')
-        role_name = f"role-knowledge-base-for-{project_name}-{aws_region}"
-        policy_name = f"knowledge-base-for-{project_name}-{aws_region}"
-        
-        if not all([aws_region, project_name]):
-            print("Error: Missing required configuration in config.json")
-            return False
-        
-        try:
-            iam_client = boto3.client('iam')
-            
-            # Check if role exists
-            try:
-                existing_role = iam_client.get_role(RoleName=role_name)
-                role_arn = existing_role['Role']['Arn']
-                
-                # Delete inline policy
-                try:
-                    iam_client.delete_role_policy(RoleName=role_name, PolicyName=policy_name)
-                    print(f"✓ Deleted inline policy: {policy_name}")
-                except ClientError as e:
-                    if e.response['Error']['Code'] == 'NoSuchEntity':
-                        print(f"Inline policy {policy_name} not found (may already be deleted)")
-                    else:
-                        print(f"Warning: Failed to delete inline policy {policy_name}: {e}")
-                
-                # Delete role
-                iam_client.delete_role(RoleName=role_name)
-                print(f"✓ Knowledge Base IAM role deleted: {role_arn}")
-                return True
-                
-            except iam_client.exceptions.NoSuchEntityException:
-                print(f"Knowledge Base IAM role {role_name} not found (may already be deleted)")
-                return True
-                
-        except Exception as e:
-            print(f"Error deleting Knowledge Base role: {e}")
-            return False
-            
-    except Exception as e:
-        print(f"Error deleting Knowledge Base role: {e}")
-        return False
-
-def delete_s3_bucket(config):
-    """Delete S3 bucket for Knowledge Base storage"""
-    try:
-        aws_region = config.get('region')
-        project_name = config.get('projectName')
-        account_id = config.get('accountId')
-        bucket_name = config.get('bucket_name')
-        
-        if not all([aws_region, project_name, account_id]):
-            print("Error: Missing required configuration in config.json")
-            return False
-        
-        if not bucket_name:
-            bucket_name = f"storage-for-{project_name}-{account_id}-{aws_region}"
-        
-        try:
-            s3_client = boto3.client('s3', region_name=aws_region)
-            
-            # Check if bucket exists
-            try:
-                s3_client.head_bucket(Bucket=bucket_name)
-            except ClientError as e:
-                if e.response['Error']['Code'] == '404':
-                    print(f"S3 bucket {bucket_name} not found (may already be deleted)")
-                    return True
-                else:
-                    print(f"Error checking bucket: {e}")
-                    return False
-            
-            # List and delete all objects
-            try:
-                paginator = s3_client.get_paginator('list_objects_v2')
-                pages = paginator.paginate(Bucket=bucket_name)
-                
-                for page in pages:
-                    if 'Contents' in page:
-                        objects = [{'Key': obj['Key']} for obj in page['Contents']]
-                        if objects:
-                            s3_client.delete_objects(
-                                Bucket=bucket_name,
-                                Delete={'Objects': objects}
-                            )
-                            print(f"✓ Deleted {len(objects)} objects from bucket")
-            except Exception as e:
-                print(f"Warning: Error deleting objects from bucket: {e}")
-            
-            # Delete bucket
-            try:
-                s3_client.delete_bucket(Bucket=bucket_name)
-                print(f"✓ S3 bucket deleted: {bucket_name}")
-                return True
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'NoSuchBucket':
-                    print(f"S3 bucket {bucket_name} not found (may already be deleted)")
-                    return True
-                else:
-                    print(f"Error deleting bucket: {e}")
-                    return False
-                    
-        except Exception as e:
-            print(f"Error deleting S3 bucket: {e}")
-            return False
-            
-    except Exception as e:
-        print(f"Error deleting S3 bucket: {e}")
-        return False
-
-def delete_knowledge_base_resources():
-    """Delete all Knowledge Base related resources"""
-    print(f"\n{'='*60}")
-    print("Deleting Knowledge Base resources")
-    print(f"{'='*60}")
-    
-    try:
-        config = load_config()
-        if not config:
-            return False
-        
-        aws_region = config.get('region')
-        project_name = config.get('projectName')
-        
-        if not all([aws_region, project_name]):
-            print("Error: Missing required configuration in config.json")
-            print("Required: region, projectName")
-            return False
-        
-        # Delete in reverse order of creation (respecting dependencies)
-        steps = [
-            ("Deleting data source", lambda: delete_data_source(config)),
-            ("Deleting knowledge base", lambda: delete_knowledge_base(config)),
-            ("Deleting S3 Vector index", lambda: delete_s3_vector_index(config)),
-            ("Deleting S3 Vector bucket", lambda: delete_s3_vector_bucket(config)),
-            ("Deleting Knowledge Base IAM role", lambda: delete_knowledge_base_role(config)),
-            ("Deleting S3 bucket", lambda: delete_s3_bucket(config)),
-        ]
-        
-        for step_name, step_func in steps:
-            print(f"\n{step_name}...")
-            if not step_func():
-                print(f"Warning: Failed to complete step '{step_name}'")
-        
-        print("\n✓ Knowledge Base resources deletion completed")
-        return True
-        
-    except Exception as e:
-        print(f"Error deleting Knowledge Base resources: {e}")
-        return False
-
-# ============================================================================
 # Main Function
 # ============================================================================
 
@@ -824,7 +451,6 @@ def main():
     steps = [
         ("Deleting AgentCore runtime", delete_agent_runtime),
         ("Deleting ECR repository", delete_ecr_repository),
-        ("Deleting Knowledge Base resources", delete_knowledge_base_resources),
         ("Deleting IAM role and policy", delete_iam_resources),
     ]
     

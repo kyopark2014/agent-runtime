@@ -1,8 +1,8 @@
 import asyncio
-import json
+import httpx
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 async def test_mcp_tools():
     """Test MCP server tools"""
@@ -14,7 +14,8 @@ async def test_mcp_tools():
     print(f"Connecting to: {mcp_url}")
     
     try:
-        async with streamablehttp_client(mcp_url, headers, timeout=120, terminate_on_close=False) as (
+        http_client = httpx.AsyncClient(headers=headers, timeout=120.0)
+        async with streamable_http_client(mcp_url, http_client=http_client, terminate_on_close=False) as (
             read_stream, write_stream, _,):
             
             async with ClientSession(read_stream, write_stream) as session:
@@ -47,9 +48,9 @@ async def test_mcp_tools():
                             if hasattr(content, 'text'):
                                 print(f"Content: {content.text}")
                 except asyncio.TimeoutError:
-                    print("❌ S3 list_buckets 타임아웃 (60초)")
+                    print("S3 list_buckets 타임아웃 (60초)")
                 except Exception as s3_error:
-                    print(f"❌ S3 list_buckets 실패: {s3_error}")
+                    print(f"S3 list_buckets 실패: {s3_error}")
                 
                 # Test AWS EC2 instance list retrieval
                 print("\n=== Testing AWS EC2 Describe Instances ===")
@@ -72,15 +73,18 @@ async def test_mcp_tools():
                             if hasattr(content, 'text'):
                                 print(f"Content: {content.text}")
                 except asyncio.TimeoutError:
-                    print("❌ EC2 describe_instances 타임아웃 (60초)")
+                    print("EC2 describe_instances 타임아웃 (60초)")
                 except Exception as ec2_error:
-                    print(f"❌ EC2 describe_instances 실패: {ec2_error}")
+                    print(f"EC2 describe_instances 실패: {ec2_error}")
                 
                 print("\n=== MCP Connection Test Complete ===")                
                                 
     except Exception as e:
         print(f"Error testing MCP server: {e}")
         print(f"Error type: {type(e).__name__}")
+        import traceback
+        print(f"Full traceback:")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     asyncio.run(test_mcp_tools())
