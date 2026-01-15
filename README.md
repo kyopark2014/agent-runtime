@@ -179,26 +179,8 @@ async def agent_langgraph(payload):
 
 ### AgentCore Runtime으로 Agent 배포하기
 
-LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./runtime/langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. [push-to-ecr.sh](./runtime/langgraph/push-to-ecr.sh)를 이용하면 손쉽게 배포할 수 있습니다.
+LangGraph와 strands agent에 대한 이미지를 [Dockerfile](./runtime/langgraph/Dockerfile)을 이용해 빌드후 ECR에 배포합니다. 
 
-```text
-./push-to-ecr.sh
-```
-
-[push-to-ecr.sh](./runtime/langgraph/push-to-ecr.sh)에서는 아래와 같이 ECR에 login후에 push를 수행합니다.
-
-```text
-aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-docker build -t ${ECR_REPOSITORY}:${IMAGE_TAG} .
-docker tag ${ECR_REPOSITORY}:${IMAGE_TAG} ${ECR_URI}
-docker push ${ECR_URI}
-```
-
-이후, 아래와 같이 [create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)를 이용해 AgentCore에 runtime으로 배포합니다.
-
-```text
-python create_agent_runtime.py
-```
 
 [create_agent_runtime.py](./runtime/langgraph/create_agent_runtime.py)에서는 AgentCore에 처음으로 배포하는지 확인하여 아래와 같이 runtime을 생성합니다. 여기서 networkMode는 PUBLIC/VPC를 선택할 수 있어서 필요시 agent를 특정 VPC 접속으로 제한할 수 있고, Security Group을 이용하여 사내로 접속을 제한할 수 있습니다. 또한, protocolConfiguration은 HTTP, MCP, A2A를 선택하여 필요한 용도에 맞게 사용할 수 있습니다. 인증은 기본이 IAM이며, 필요시 authorizerConfiguration을 이용해 JWT를 사용할 수 있습니다.
 
@@ -253,48 +235,6 @@ response = client.update_agent_runtime(
 )
 ```
 
-### Local에서 동작 확인
-
-Agent를 AgentCore에 배포하기 전에 local 환경에서 충분히 동작을 테스트하면 개발 소요시간을 단축할 수 있습니다. [build-docker.sh](./runtime/langgraph/build-docker.sh)를 이용해 local 환경에서 docker로 된 runtime을 빌드합니다. 
-
-```text
-./build-docker.sh
-```
-
-[build-docker.sh](./runtime/langgraph/build-docker.sh)에서는 config.json에서 환경 값을 읽은 후에 아래와 같이 docker를 빌드합니다. docker에서 AWS CLI를 사용하기 위해 AWS Credential을 환경값으로 주고 있습니다.
-
-```text
-sudo docker build \
-    --platform linux/arm64 \
-    --build-arg AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID" \
-    --build-arg AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
-    --build-arg AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-us-east-1}" \
-    --build-arg AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
-    -t ${DOCKER_NAME}:latest .
-```
-
-[run-docker.sh](./runtime/langgraph/run-docker.sh)을 이용해 실행할 수 있습니다.
-
-```text
-./run-docker.sh
-```
-
-Runtime agent의 경우에 [run-docker.sh](./runtime/langgraph/run-docker.sh)와 같이 8080으로 expose를 합니다.
-
-```text
-docker run -d \
-    --name ${DOCKER_NAME}-container \
-    -p 8080:8080 \
-    --entrypoint="" \
-    ${DOCKER_NAME}:latest \
-    uv run uvicorn agent:app --host 0.0.0.0 --port 8080
-```
-
-이후 [test_runtime_local.py](./runtime/langgraph/test_runtime_local.py)을 이용해 동작을 테스트 합니다.
-
-```text
-python test_runtime_local.py
-```
 
 [test_runtime_local.py](./runtime/langgraph/test_runtime_local.py)에서는 아래와 같이 prompt, MCP server, model 정보를 설정합니다. 이후 request를 POST로 전송한 후에 결과를 확인합니다. 
 
@@ -479,37 +419,6 @@ response = bedrock_agent.create_knowledge_base(
 )
 ```
 
-이를 배포할 때에는 아래와 같이 수행합니다.
-
-1. [create_iam_policies.py](./runtime/kb-retriever/create_iam_policies.py)를 이용해 필요한 권한을 생성합니다.
-
-```text
-python create_iam_policies.py
-```
-
-2. MCP 접속에 활용할 congnito를 설정하고 생성된 token을 secret manager에 등록합니다.
-
-```text
-python create_bearer_token.py
-```
-
-3. Docker image를 생성하여 ECR에 푸쉬합니다.
-
-```text
-./build-docker.sh
-```
-
-4. AgentCore에 MCP server를 생성합니다.
-
-```text
-python create_mcp_runtime.py
-```
-
-만약 local에서 배포 결과를 확인하고 싶다면, [test_mcp_remote.py](./runtime/kb-retriever/test_mcp_remote.py)를 이용해 테스트를 수행합니다.
-
-```python
-python test_mcp_remote.py
-```
 
 [test_mcp_remote.py](./runtime/kb-retriever/test_mcp_remote.py)에서는 아래와 같이 mcp_url에 요청을 보내서 동작을 확인합니다. 아래에서는 [kb-retrieve](./runtime/kb-retriever/mcp_server_retrieve.py) MCP server의 retrieve tool에 대한 동작 테스트를 수행합니다.
 
@@ -733,18 +642,138 @@ if "text/event-stream" in response.get("contentType", ""):
 ```
 
 
+## 배포하기
 
-### Streamlit에서 실행하기
+### EC2로 배포하기
 
-여기서는 Streamlit을 이용하여 AgentCore의 동작을 테스트 할 수 있습니다. 아래와 streamlit을 실행할 수 있습니다.
+AWS console의 EC2로 접속하여 [Launch an instance](https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#Instances:)를 선택합니다. [Launch instance]를 선택한 후에 적당한 Name을 입력합니다. (예: es) key pair은 "Proceed without key pair"을 선택하고 넘어갑니다. 
+
+<img width="700" alt="ec2이름입력" src="https://github.com/user-attachments/assets/c551f4f3-186d-4256-8a7e-55b1a0a71a01" />
+
+
+Instance가 준비되면 [Connet] - [EC2 Instance Connect]를 선택하여 아래처럼 접속합니다. 
+
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/e8a72859-4ac7-46af-b7ae-8546ea19e7a6" />
+
+이후 아래와 같이 python, pip, git, boto3를 설치합니다.
+
+```text
+sudo yum install python3 python3-pip git docker -y
+pip install boto3
+```
+
+Workshop의 경우에 아래 형태로 된 Credential을 복사하여 EC2 터미널에 입력합니다.
+
+<img width="700" alt="credential" src="https://github.com/user-attachments/assets/261a24c4-8a02-46cb-892a-02fb4eec4551" />
+
+아래와 같이 git source를 가져옵니다.
+
+```python
+git clone https://github.com/kyopark2014/es-us-project
+```
+
+아래와 같이 installer.py를 이용해 설치를 시작합니다.
+
+```python
+cd es-us-project && python3 installer.py
+```
+
+API 구현에 필요한 credential은 secret으로 관리합니다. 따라서 설치시 필요한 credential 입력이 필요한데 아래와 같은 방식을 활용하여 미리 credential을 준비합니다. 
+
+- 일반 인터넷 검색: [Tavily Search](https://app.tavily.com/sign-in)에 접속하여 가입 후 API Key를 발급합니다. 이것은 tvly-로 시작합니다.  
+- 날씨 검색: [openweathermap](https://home.openweathermap.org/api_keys)에 접속하여 API Key를 발급합니다. 이때 price plan은 "Free"를 선택합니다.
+
+설치가 완료되면 아래와 같은 CloudFront로 접속하여 동작을 확인합니다. 
+
+<img width="500" alt="cloudfront_address" src="https://github.com/user-attachments/assets/7ab1a699-eefb-4b55-b214-23cbeeeb7249" />
+
+접속한 후 아래와 같이 Agent를 선택한 후에 적절한 MCP tool을 선택하여 원하는 작업을 수행합니다.
+
+<img width="750" alt="image" src="https://github.com/user-attachments/assets/30ea945a-e896-438f-9f16-347f24c2f330" />
+
+인프라가 더이상 필요없을 때에는 uninstaller.py를 이용해 제거합니다.
+
+```text
+python uninstaller.py
+```
+
+
+### 배포된 Application 업데이트 하기
+
+AWS console의 EC2로 접속하여 [Launch an instance](https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#Instances:)를 선택하여 아래와 같이 아래와 같이 "app-for-es-us"라는 이름을 가지는 instance id를 선택합니다.
+
+<img width="750" alt="image" src="https://github.com/user-attachments/assets/7d6d756a-03ba-4422-9413-9e4b6d3bc1da" />
+
+[connect]를 선택한 후에 Session Manager를 선택하여 접속합니다. 
+
+<img width="700" alt="image" src="https://github.com/user-attachments/assets/d1119cd6-08fb-4d3e-b1c2-77f2d7c1216a" />
+
+이후 아래와 같이 업데이트한 후에 다시 브라우저에서 확인합니다.
+
+```text
+cd ~/es-us-project/ && sudo ./update.sh
+```
+
+### 실행 로그 확인
+
+[EC2 console](https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#Instances:)에서 "app-for-es-us"라는 이름을 가지는 instance id를 선택 한 후에, EC2의 Session Manager를 이용해 접속합니다. 
+
+먼저 아래와 같이 현재 docker container ID를 확인합니다.
+
+```text
+sudo docker ps
+```
+
+이후 아래와 같이 container ID를 이용해 로그를 확인합니다.
+
+```text
+sudo docker logs [container ID]
+```
+
+실제 실행시 결과는 아래와 같습니다.
+
+<img width="600" src="https://github.com/user-attachments/assets/2ca72116-0077-48a0-94be-3ab15334e4dd" />
+
+### Local에서 실행하기
+
+AWS 환경을 잘 활용하기 위해서는 [AWS CLI를 설치](https://docs.aws.amazon.com/ko_kr/cli/v1/userguide/cli-chap-install.html)하여야 합니다. EC2에서 배포하는 경우에는 별도로 설치가 필요하지 않습니다. Local에 설치시는 아래 명령어를 참조합니다.
+
+```text
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" 
+unzip awscliv2.zip
+sudo ./aws/install
+```
+
+AWS credential을 아래와 같이 AWS CLI를 이용해 등록합니다.
+
+```text
+aws configure
+```
+
+설치하다가 발생하는 각종 문제는 [Kiro-cli](https://aws.amazon.com/ko/blogs/korea/kiro-general-availability/)를 이용해 빠르게 수정합니다. 아래와 같이 설치할 수 있지만, Windows에서는 [Kiro 설치](https://kiro.dev/downloads/)에서 다운로드 설치합니다. 실행시는 셀에서 "kiro-cli"라고 입력합니다. 
+
+```python
+curl -fsSL https://cli.kiro.dev/install | bash
+```
+
+venv로 환경을 구성하면 편리하게 패키지를 관리합니다. 아래와 같이 환경을 설정합니다.
+
+```text
+python -m venv .venv
+source .venv/bin/activate
+```
+
+이후 다운로드 받은 github 폴더로 이동한 후에 아래와 같이 필요한 패키지를 추가로 설치 합니다.
+
+```text
+pip install -r requirements.txt
+```
+
+이후 아래와 같은 명령어로 streamlit을 실행합니다. 
 
 ```text
 streamlit run application/app.py
 ```
-
-실행 후에 아래와 같이 왼쪽 메뉴에서 사용할 MCP 서버를 선택하고 질문을 입력합니다.
-
-<img width="1330" height="847" alt="image" src="https://github.com/user-attachments/assets/50cda7f5-3cd2-4a21-8c36-c0d8272fad2a" />
 
 
 ## 실행 결과
