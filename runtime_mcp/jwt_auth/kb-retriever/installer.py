@@ -16,7 +16,6 @@ import logging
 from datetime import datetime
 from botocore.exceptions import ClientError, NoCredentialsError
 
-# Setup logging for Knowledge Base functions
 logging.basicConfig(
     level=logging.INFO,
     format='%(filename)s:%(lineno)d | %(message)s',
@@ -29,7 +28,6 @@ logger = logging.getLogger("installer")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.json")
 
-# Import s3vector module for Knowledge Base creation
 sys.path.insert(0, script_dir)
 
 def load_config():
@@ -176,10 +174,34 @@ def create_bedrock_agentcore_policy(config):
                 "Resource": "*"
             },
             {
+                "Sid": "S3VectorsAccess",
+                "Effect": "Allow",
+                "Action": [
+                    "s3vectors:*"
+                ],
+                "Resource": "*"
+            },
+            {
                 "Sid": "EC2Access",
                 "Effect": "Allow",
                 "Action": [
                     "ec2:*"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "CloudFrontAccess",
+                "Effect": "Allow",
+                "Action": [
+                    "cloudfront:ListDistributions",
+                    "cloudfront:GetDistribution",
+                    "cloudfront:DescribeDistribution",
+                    "cloudfront:ListCloudFrontOriginAccessIdentities",
+                    "cloudfront:GetCloudFrontOriginAccessIdentity",
+                    "cloudfront:ListInvalidations",
+                    "cloudfront:GetInvalidation",
+                    "cloudfront:ListStreamingDistributions",
+                    "cloudfront:GetStreamingDistribution"
                 ],
                 "Resource": "*"
             }
@@ -596,15 +618,20 @@ def get_cognito_config(config, cognito_config):
         user_pool_name = f"{project_name}-agentcore-user-pool"
         print(f"No user pool name found in config, using default user pool name: {user_pool_name}")
         cognito_config.setdefault('user_pool_name', user_pool_name)
-        
+    
+    # If user_pool_id is not set, try to find existing user pool by name
+    if not user_pool_id and user_pool_name:
         cognito_client = boto3.client('cognito-idp', region_name=region)
-        response = cognito_client.list_user_pools(MaxResults=60)
-        for pool in response['UserPools']:
-            if pool['Name'] == user_pool_name:
-                user_pool_id = pool['Id']
-                print(f"Found cognito user pool: {user_pool_id}")
-                cognito_config['user_pool_id'] = user_pool_id
-                break
+        try:
+            response = cognito_client.list_user_pools(MaxResults=60)
+            for pool in response['UserPools']:
+                if pool['Name'] == user_pool_name:
+                    user_pool_id = pool['Id']
+                    print(f"Found cognito user pool: {user_pool_id}")
+                    cognito_config['user_pool_id'] = user_pool_id
+                    break
+        except Exception as e:
+            print(f"Warning: Could not search for existing user pools: {e}")
     
     client_name = cognito_config.get('client_name')
     if not client_name:
@@ -699,19 +726,53 @@ def create_cognito_user_pool(config):
     user_pool_name = cognito_config['user_pool_name']
     user_pool_id = cognito_config.get('user_pool_id')
     
+    # Verify if user_pool_id exists, if not create a new one
+    if user_pool_id:
+        cognito_client = boto3.client('cognito-idp', region_name=region)
+        try:
+            cognito_client.describe_user_pool(UserPoolId=user_pool_id)
+            print(f"✓ User Pool exists: {user_pool_id}")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                print(f"Warning: User Pool '{user_pool_id}' does not exist. Creating new one...")
+                user_pool_id = None
+            else:
+                raise
+    
+    user_pool_created = False
     if not user_pool_id:
         user_pool_id = create_user_pool(user_pool_name, region)
         print(f"✓ User Pool created successfully: {user_pool_id}")
         cognito_config['user_pool_id'] = user_pool_id
+        user_pool_created = True
     
     client_name = cognito_config['client_name']
     client_id = cognito_config.get('client_id')
     
-    if not client_id:
-        print("Creating new App client for existing User Pool...")
+    # If user pool was just created, or client_id doesn't exist, create a new client
+    # Also verify if client_id exists for the current user_pool_id
+    if user_pool_created or not client_id:
+        print("Creating new App client for User Pool...")
         client_id = create_client(user_pool_id, client_name, region)
         print(f"✓ App client created successfully: {client_id}")
         cognito_config['client_id'] = client_id
+    else:
+        # Verify if client_id exists for the current user_pool_id
+        cognito_client = boto3.client('cognito-idp', region_name=region)
+        try:
+            response = cognito_client.describe_user_pool_client(
+                UserPoolId=user_pool_id,
+                ClientId=client_id
+            )
+            print(f"✓ App client exists: {client_id}")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                print(f"Warning: App client '{client_id}' does not exist. Creating new one...")
+                client_id = create_client(user_pool_id, client_name, region)
+                print(f"✓ App client created successfully: {client_id}")
+                cognito_config['client_id'] = client_id
+            else:
+                raise
     
     # Save config
     config['cognito'] = cognito_config

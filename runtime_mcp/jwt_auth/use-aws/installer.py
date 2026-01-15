@@ -11,12 +11,11 @@ import os
 import json
 import shutil
 import base64
-from datetime import datetime
 import boto3
-from botocore.exceptions import ClientError, NoCredentialsError
 import logging
+from datetime import datetime
+from botocore.exceptions import ClientError, NoCredentialsError
 
-# Setup logging for Knowledge Base functions
 logging.basicConfig(
     level=logging.INFO,
     format='%(filename)s:%(lineno)d | %(message)s',
@@ -29,6 +28,8 @@ logger = logging.getLogger("installer")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.json")
 
+sys.path.insert(0, script_dir)
+
 def load_config():
     """Load config.json file."""
     try:
@@ -40,7 +41,7 @@ def load_config():
         session = boto3.Session()
         region = session.region_name
         config['region'] = region
-        config['projectName'] = "es-us"
+        config['projectName'] = "agent-runtime"
         
         sts = boto3.client("sts")
         response = sts.get_caller_identity()
@@ -49,6 +50,7 @@ def load_config():
         
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
+        pass
     
     return config
 
@@ -504,7 +506,8 @@ def push_to_ecr():
         print(f"CURRENT_FOLDER_NAME: {current_folder_name}")
         
         # Construct ECR repository name
-        ecr_repository = f"{project_name}_{current_folder_name}"
+        # Convert hyphens to underscores for ECR repository name (AWS validation requirement)
+        ecr_repository = f"{project_name}_{current_folder_name}".replace('-', '_')
         print(f"ECR_REPOSITORY: {ecr_repository}")
         
         # Construct image tag and ECR URI
@@ -575,36 +578,42 @@ def push_to_ecr():
         return False
 
 # ============================================================================
-# Cognito Functions (from create_bearer_token.py)
+# Cognito Setup Functions (from create_bearer_token.py)
 # ============================================================================
 
 def get_cognito_config(config, cognito_config):
     """Get or initialize Cognito configuration"""
+    region = config['region']
     project_name = config.get('projectName', 'agentcore')
-    region = config.get('region')
     
     user_pool_name = cognito_config.get('user_pool_name')
     user_pool_id = cognito_config.get('user_pool_id')
-    if not user_pool_name:        
-        user_pool_name = project_name + '-agentcore-user-pool'
+    
+    if not user_pool_name:
+        user_pool_name = f"{project_name}-agentcore-user-pool"
         print(f"No user pool name found in config, using default user pool name: {user_pool_name}")
         cognito_config.setdefault('user_pool_name', user_pool_name)
-
+    
+    # If user_pool_id is not set, try to find existing user pool by name
+    if not user_pool_id and user_pool_name:
         cognito_client = boto3.client('cognito-idp', region_name=region)
-        response = cognito_client.list_user_pools(MaxResults=60)
-        for pool in response['UserPools']:
-            if pool['Name'] == user_pool_name:
-                user_pool_id = pool['Id']
-                print(f"Found cognito user pool: {user_pool_id}")
-                cognito_config['user_pool_id'] = user_pool_id
-                break        
-
+        try:
+            response = cognito_client.list_user_pools(MaxResults=60)
+            for pool in response['UserPools']:
+                if pool['Name'] == user_pool_name:
+                    user_pool_id = pool['Id']
+                    print(f"Found cognito user pool: {user_pool_id}")
+                    cognito_config['user_pool_id'] = user_pool_id
+                    break
+        except Exception as e:
+            print(f"Warning: Could not search for existing user pools: {e}")
+    
     client_name = cognito_config.get('client_name')
-    if not client_name:        
+    if not client_name:
         client_name = f"{project_name}-agentcore-client"
         print(f"No client name found in config, using default client name: {client_name}")
         cognito_config['client_name'] = client_name
-
+    
     client_id = cognito_config.get('client_id')
     if not client_id and user_pool_id:
         cognito_client = boto3.client('cognito-idp', region_name=region)
@@ -613,31 +622,36 @@ def get_cognito_config(config, cognito_config):
             if client['ClientName'] == client_name:
                 client_id = client['ClientId']
                 print(f"Found cognito client: {client_id}")
-                cognito_config['client_id'] = client_id   
-                break             
-        
+                cognito_config['client_id'] = client_id
+                break
+    
     username = cognito_config.get('test_username')
     password = cognito_config.get('test_password')
     if not username or not password:
         print("No test username found in config, using default username and password. Please check config.json and update the test username and password.")
         username = f"{project_name}-test-user@example.com"
-        password = "TestPassword123!"        
+        password = "TestPassword123!"
         cognito_config['test_username'] = username
         cognito_config['test_password'] = password
-
+    
     # Set default identity pool name if not provided
-    identity_pool_name = cognito_config.get('identity_pool_name')    
+    identity_pool_name = cognito_config.get('identity_pool_name')
     if not identity_pool_name:
         identity_pool_name = f"{project_name}-agentcore-identity-pool"
         print(f"No identity pool name found in config, using default: {identity_pool_name}")
         cognito_config['identity_pool_name'] = identity_pool_name
-
+    
+    # Save config (matching create_bearer_token.py behavior)
+    config['cognito'] = cognito_config
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+    
     return cognito_config
 
 def create_user_pool(user_pool_name, region):
     """Create Cognito User Pool"""
-    cognito_client = boto3.client('cognito-idp', region_name=region)   
-
+    cognito_client = boto3.client('cognito-idp', region_name=region)
+    
     print("Creating new Cognito User Pool...")
     response = cognito_client.create_user_pool(
         PoolName=user_pool_name,
@@ -656,59 +670,92 @@ def create_user_pool(user_pool_name, region):
         AdminCreateUserConfig={
             'AllowAdminCreateUserOnly': True
         }
-    )        
+    )
     user_pool_id = response['UserPool']['Id']
     
     return user_pool_id
 
 def create_client(user_pool_id, client_name, region):
     """Create Cognito App Client"""
-    cognito_client = boto3.client('cognito-idp', region_name=region)   
-
+    cognito_client = boto3.client('cognito-idp', region_name=region)
+    
     response = cognito_client.create_user_pool_client(
-            UserPoolId=user_pool_id,
-            ClientName=client_name,
-            GenerateSecret=False,
-            ExplicitAuthFlows=[
-                'ALLOW_USER_PASSWORD_AUTH',
-                'ALLOW_REFRESH_TOKEN_AUTH'
-            ]
-        )        
+        UserPoolId=user_pool_id,
+        ClientName=client_name,
+        GenerateSecret=False,
+        ExplicitAuthFlows=[
+            'ALLOW_USER_PASSWORD_AUTH',
+            'ALLOW_REFRESH_TOKEN_AUTH'
+        ]
+    )
     client_id = response['UserPoolClient']['ClientId']
     
     return client_id
 
 def create_cognito_user_pool(config):
-    """Creates Cognito User Pool for MCP authentication"""
+    """Create Cognito User Pool and App Client"""
+    region = config['region']
     cognito_config = config.get('cognito', {})
-    if not cognito_config:
-        cognito_config = {}
-    
     cognito_config = get_cognito_config(config, cognito_config)
     
-    user_pool_name = cognito_config['user_pool_name']    
+    user_pool_name = cognito_config['user_pool_name']
     user_pool_id = cognito_config.get('user_pool_id')
-    region = config.get('region')
     
+    # Verify if user_pool_id exists, if not create a new one
+    if user_pool_id:
+        cognito_client = boto3.client('cognito-idp', region_name=region)
+        try:
+            cognito_client.describe_user_pool(UserPoolId=user_pool_id)
+            print(f"✓ User Pool exists: {user_pool_id}")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                print(f"Warning: User Pool '{user_pool_id}' does not exist. Creating new one...")
+                user_pool_id = None
+            else:
+                raise
+    
+    user_pool_created = False
     if not user_pool_id:
         user_pool_id = create_user_pool(user_pool_name, region)
         print(f"✓ User Pool created successfully: {user_pool_id}")
         cognito_config['user_pool_id'] = user_pool_id
-
-    client_id = cognito_config.get('client_id')        
+        user_pool_created = True
+    
     client_name = cognito_config['client_name']
-    if not client_id:         
-        print("Creating new App client for existing User Pool...")
+    client_id = cognito_config.get('client_id')
+    
+    # If user pool was just created, or client_id doesn't exist, create a new client
+    # Also verify if client_id exists for the current user_pool_id
+    if user_pool_created or not client_id:
+        print("Creating new App client for User Pool...")
         client_id = create_client(user_pool_id, client_name, region)
         print(f"✓ App client created successfully: {client_id}")
         cognito_config['client_id'] = client_id
-
-    # Update config
+    else:
+        # Verify if client_id exists for the current user_pool_id
+        cognito_client = boto3.client('cognito-idp', region_name=region)
+        try:
+            response = cognito_client.describe_user_pool_client(
+                UserPoolId=user_pool_id,
+                ClientId=client_id
+            )
+            print(f"✓ App client exists: {client_id}")
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                print(f"Warning: App client '{client_id}' does not exist. Creating new one...")
+                client_id = create_client(user_pool_id, client_name, region)
+                print(f"✓ App client created successfully: {client_id}")
+                cognito_config['client_id'] = client_id
+            else:
+                raise
+    
+    # Save config
     config['cognito'] = cognito_config
-    update_config('cognito', cognito_config)
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
     print(f"✓ Client ID updated in config.json: {client_id}")
-
-    return user_pool_id, client_id
+    
+    return user_pool_id, client_id, cognito_config
 
 def check_user(user_pool_id, username, region):
     """Check if user exists in Cognito User Pool"""
@@ -718,11 +765,17 @@ def check_user(user_pool_id, username, region):
             UserPoolId=user_pool_id,
             Username=username
         )
-        print(f"✓ User '{username}' already exists")        
+        print(f"✓ User '{username}' already exists")
         return True
     except cognito_idp_client.exceptions.UserNotFoundException:
         print(f"User '{username}' does not exist, creating...")
         return False
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ResourceNotFoundException':
+            print(f"User Pool '{user_pool_id}' does not exist, user cannot be checked")
+            return False
+        else:
+            raise
 
 def create_user(user_pool_id, username, password, region):
     """Create user in Cognito User Pool"""
@@ -744,7 +797,7 @@ def create_user(user_pool_id, username, password, region):
             TemporaryPassword=password,
             MessageAction='SUPPRESS'  # Don't send welcome email
         )
-
+        
         cognito_idp_client.admin_set_user_password(
             UserPoolId=user_pool_id,
             Username=username,
@@ -753,6 +806,14 @@ def create_user(user_pool_id, username, password, region):
         )
         print(f"✓ Password set for user '{username}'")
         return True
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'ResourceNotFoundException':
+            print(f"Error: User Pool '{user_pool_id}' does not exist. Cannot create user.")
+            raise
+        else:
+            print(f"Warning: Could not set permanent password: {e}")
+            print("User may need to change password on first login")
+            return False
     except Exception as e:
         print(f"Warning: Could not set permanent password: {e}")
         print("User may need to change password on first login")
@@ -760,37 +821,41 @@ def create_user(user_pool_id, username, password, region):
 
 def create_test_user(config):
     """Create a test user in Cognito User Pool"""
+    region = config['region']
     cognito_config = config.get('cognito', {})
     user_pool_id = cognito_config.get('user_pool_id')
     username = cognito_config.get('test_username')
     password = cognito_config.get('test_password')
-    region = config.get('region')
-    project_name = config.get('projectName', 'agentcore')
+    
+    if not user_pool_id:
+        raise ValueError("User Pool ID is required. Please create Cognito User Pool first.")
     
     if not username or not password:
+        project_name = config.get('projectName', 'agentcore')
         print("No test username found in config, using default username and password. Please check config.json and update the test username and password.")
         username = f"{project_name}-test-user@example.com"
-        password = "TestPassword123!"        
-    cognito_config['test_username'] = username
-    cognito_config['test_password'] = password
-        
+        password = "TestPassword123!"
+        cognito_config['test_username'] = username
+        cognito_config['test_password'] = password
+    
     if not check_user(user_pool_id, username, region):
-        print(f"Creating test user in User Pool: {user_pool_id}")        
+        print(f"Creating test user in User Pool: {user_pool_id}")
         create_user(user_pool_id, username, password, region)
-    print(f"✓ User '{username}' created successfully")        
-
+    print(f"✓ User '{username}' created successfully")
+    
     config['cognito'] = cognito_config
-    update_config('cognito', cognito_config)
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
     return config
 
 def create_cognito_identity_pool(user_pool_id, client_id, config):
-    """Creates Cognito Identity Pool"""
+    """Create Cognito Identity Pool"""
+    region = config['region']
     cognito_config = config.get('cognito', {})
     identity_pool_name = cognito_config.get('identity_pool_name')
     identity_pool_id = cognito_config.get('identity_pool_id')
-    region = config.get('region')
     
-    if not identity_pool_id:    
+    if not identity_pool_id:
         identity_client = boto3.client('cognito-identity', region_name=region)
         response = identity_client.create_identity_pool(
             IdentityPoolName=identity_pool_name,
@@ -802,17 +867,16 @@ def create_cognito_identity_pool(user_pool_id, client_id, config):
                     'ServerSideTokenCheck': False
                 }
             ]
-        )        
+        )
         identity_pool_id = response['IdentityPoolId']
         print(f"✓ Identity Pool created successfully: {identity_pool_id}")
-        cognito_config['identity_pool_id'] = identity_pool_id
-        config['cognito'] = cognito_config
-        update_config('cognito', cognito_config)
-                
+        # Note: identity_pool_id is not saved to cognito_config here to match create_bearer_token.py behavior
+        # It will be saved in setup_cognito() function
+    
     return identity_pool_id
 
 def update_agentcore_config_with_cognito(user_pool_id, identity_pool_id, client_id, discovery_url, config):
-    """Updates AgentCore configuration with Cognito information"""
+    """Update AgentCore configuration with Cognito information"""
     cognito_config = config.get('cognito', {})
     cognito_config.update({
         'client_id': client_id,
@@ -820,20 +884,22 @@ def update_agentcore_config_with_cognito(user_pool_id, identity_pool_id, client_
         'identity_pool_id': identity_pool_id,
         'discovery_url': discovery_url
     })
-    
     config['cognito'] = cognito_config
-    update_config('cognito', cognito_config)
     
-    print(f"AgentCore configuration updated successfully")
+    # Save configuration file
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
+    
+    print(f"AgentCore configuration updated successfully: {config_path}")
 
 def create_cognito_bearer_token(config):
     """Get a fresh bearer token from Cognito"""
     try:
-        cognito_config = config.get('cognito', {})
+        region = config['region']
+        cognito_config = config['cognito']
         client_id = cognito_config['client_id']
         username = cognito_config['test_username']
         password = cognito_config['test_password']
-        region = config.get('region')
         
         # Create Cognito client
         client = boto3.client('cognito-idp', region_name=region)
@@ -859,12 +925,11 @@ def create_cognito_bearer_token(config):
         return None
 
 def save_bearer_token(secret_name, bearer_token, region):
-    """Save bearer token to Secrets Manager"""
-    try:        
-        session = boto3.Session()
-        client = session.client('secretsmanager', region_name=region)
+    """Save bearer token to AWS Secrets Manager"""
+    try:
+        client = boto3.client('secretsmanager', region_name=region)
         
-        # Create secret value with bearer_token 
+        # Create secret value with bearer_token
         secret_value = {
             "bearer_token": bearer_token
         }
@@ -893,44 +958,36 @@ def save_bearer_token(secret_name, bearer_token, region):
     except Exception as e:
         print(f"Error saving bearer token: {e}")
 
-def setup_cognito(config):
+def setup_cognito():
     """Setup Cognito User Pool, Identity Pool, and Bearer Token"""
     print(f"\n{'='*60}")
     print("Setting up Cognito authentication")
     print(f"{'='*60}")
     
     try:
-        region = config.get('region')
+        config = load_config()
+        region = config['region']
         project_name = config.get('projectName', 'agentcore')
         
         # 1. Create Cognito User Pool
         print("\n1. Creating Cognito User Pool...")
-        user_pool_id, client_id = create_cognito_user_pool(config)
-        
-        # Reload config to get updated cognito config
-        config = load_config()
+        user_pool_id, client_id, cognito_config = create_cognito_user_pool(config)
+        config['cognito'] = cognito_config
         
         # 2. Create Cognito Identity Pool
         print("\n2. Creating Cognito Identity Pool...")
         identity_pool_id = create_cognito_identity_pool(user_pool_id, client_id, config)
-        
-        # Reload config
-        config = load_config()
+        cognito_config['identity_pool_id'] = identity_pool_id
+        config['cognito'] = cognito_config
         
         # 3. Update AgentCore Configuration
         print("\n3. Updating AgentCore Configuration...")
         discovery_url = f"https://cognito-idp.{region}.amazonaws.com/{user_pool_id}/.well-known/openid-configuration"
         update_agentcore_config_with_cognito(user_pool_id, identity_pool_id, client_id, discovery_url, config)
         
-        # Reload config
-        config = load_config()
-        
         # 4. Create test user
-        print("\n4. Creating test user...")        
+        print("\n4. Creating test user...")
         config = create_test_user(config)
-        
-        # Reload config
-        config = load_config()
         
         # 5. Create Bearer token
         print("\n5. Creating Bearer token...")
@@ -939,361 +996,29 @@ def setup_cognito(config):
             print("Warning: Failed to create bearer token")
             return False
         
-        # 6. Save bearer token    
+        # 6. Save bearer token
+        print("\n6. Saving Bearer token...")
         secret_name = f'{project_name.lower()}/credentials'
-        print(f"secret_name: {secret_name}")    
-        update_config('secret_name', secret_name)
+        config['secret_name'] = secret_name
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(config, f, indent=2)
+        print(f"✓ secret_name updated in config.json: {secret_name}")
+        
         save_bearer_token(secret_name, bearer_token, region)
         
         print("\n✓ Cognito setup completed")
+        print("  - Cognito User Pool and Identity Pool created")
+        print("  - App client authentication flows configured")
+        print("  - Test user created")
+        print("  - Bearer token generated and saved")
+        
         return True
         
     except Exception as e:
         print(f"Error setting up Cognito: {e}")
+        import traceback
+        traceback.print_exc()
         return False
-
-# ============================================================================
-# Knowledge Base Creation Functions (from s3vector.py)
-# ============================================================================
-
-def create_bucket(bucket_name, region):
-    """Create S3 bucket for Knowledge Base storage"""
-    s3 = boto3.client('s3', region_name=region)
-    response = s3.list_buckets()
-    buckets = response.get('Buckets', [])
-    if not any(bucket['Name'] == bucket_name for bucket in buckets):
-        logger.info(f"bucket_name: {bucket_name} is not exists.")
-        
-        s3.create_bucket(
-            Bucket=bucket_name,
-            CreateBucketConfiguration={'LocationConstraint': region}
-        )
-        logger.info(f"bucket_name: {bucket_name} is created.")    
-        
-        s3.put_object(Bucket=bucket_name, Key='docs/')
-        logger.info(f"docs folder is created in {bucket_name}.")
-    else:
-        logger.info(f"bucket_name: {bucket_name} is already exists.")
-
-def create_knowledge_base(config):
-    """Create Knowledge Base with S3 Vector storage (from s3vector.py)"""
-    aws_region = config.get('region')
-    accountId = config.get('accountId')
-    projectName = config.get('projectName')
-    
-    # Create bucket for Knowledge Base
-    bucket_name = config.get("bucket_name", "")
-    print(f"bucket_name: {bucket_name}")
-    
-    if not bucket_name:
-        bucket_name = f"storage-for-{projectName}-{accountId}-{aws_region}"
-        config['bucket_name'] = bucket_name
-        print(f"bucket_name: {bucket_name}")
-        
-        create_bucket(bucket_name, aws_region)
-        update_config('bucket_name', bucket_name)
-    
-    # Create role for knowledge base
-    role_name = f"role-knowledge-base-for-{projectName}-{aws_region}"
-    
-    # IAM policy document for knowledge base role
-    knowledge_base_policy = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "BedrockAllStatement",
-                "Action": "bedrock:*",
-                "Resource": "*",
-                "Effect": "Allow"
-            },
-            {
-                "Sid": "BedrockAgentStatement",
-                "Action": [
-                    "bedrock-agent:*"
-                ],
-                "Resource": "*",
-                "Effect": "Allow"
-            },
-            {
-                "Sid": "BedrockInvokeInferenceProfileStatement",
-                "Effect": "Allow",
-                "Action": [
-                    "bedrock:GetInferenceProfile",
-                    "bedrock:InvokeModel"
-                ],
-                "Resource": "*"
-            },
-            {
-                "Sid": "S3BucketStatement",
-                "Effect": "Allow",
-                "Action": ["s3:*"],
-                "Resource": "*"
-            },
-            {
-                "Sid": "S3VectorsStatement",
-                "Effect": "Allow",
-                "Action": [
-                    "s3vectors:*"
-                ],
-                "Resource": "*"
-            }
-        ]
-    }
-    
-    # Trust policy for Bedrock service
-    trust_policy = {
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Effect": "Allow",
-                "Principal": {"Service": "bedrock.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-            }
-        ]
-    }
-    
-    iam = boto3.client('iam', region_name=aws_region)    
-    response = iam.list_roles(MaxItems=200)    
-    roles = response.get('Roles', [])
-    role_arn = None
-    
-    if not any(role['RoleName'] == role_name for role in roles):
-        logger.info(f"role_name: {role_name} is not exists.")
-        response = iam.create_role(RoleName=role_name, AssumeRolePolicyDocument=json.dumps(trust_policy))
-        role_arn = response['Role']['Arn']
-        logger.info(f"role_arn: {role_arn}")
-        
-        iam.put_role_policy(RoleName=role_name, PolicyName=f"knowledge-base-for-{projectName}-{aws_region}", PolicyDocument=json.dumps(knowledge_base_policy))
-        
-        logger.info(f"role_name: {role_name} is created.")
-    else:
-        logger.info(f"role_name: {role_name} is already exists.")
-        
-        # Get the existing role ARN
-        for role in roles:
-            if role['RoleName'] == role_name:
-                role_arn = role['Arn']
-                logger.info(f"role_arn: {role_arn}")
-                break
-        
-        # Update trust policy for existing role
-        iam.update_assume_role_policy(RoleName=role_name, PolicyDocument=json.dumps(trust_policy))
-        logger.info(f"Updated trust policy for existing role: {role_name}")
-        
-        # Update policy for existing role to ensure all permissions
-        iam.put_role_policy(RoleName=role_name, PolicyName=f"knowledge-base-for-{projectName}-{aws_region}", PolicyDocument=json.dumps(knowledge_base_policy))
-        logger.info(f"Updated policy for existing role: {role_name}")
-    
-    # Create S3 Vector Bucket client
-    client = boto3.client('s3vectors', region_name=aws_region)
-    
-    s3_vector_bucket_name = config.get('s3_vector_bucket_name', "")
-    logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name}")
-    s3_vector_bucket_arn = config.get('s3_vector_bucket_arn', "")
-    logger.info(f"s3_vector_bucket_arn: {s3_vector_bucket_arn}")
-    
-    if not s3_vector_bucket_name or not s3_vector_bucket_arn:
-        s3_vector_bucket_name = f"s3-vector-for-{projectName}-{accountId}-{aws_region}"
-        logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name}")
-                
-        response = client.list_vector_buckets(maxResults=50)
-        vectorBuckets = response.get('vectorBuckets', [])
-        if not any(vectorBucket['vectorBucketName'] == s3_vector_bucket_name for vectorBucket in vectorBuckets):
-            response = client.create_vector_bucket(vectorBucketName=s3_vector_bucket_name)
-            logger.info(f"response of create_vector_bucket: {response}")
-            
-            logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is created.")
-            # Refresh list to fetch ARN after creation
-            response = client.list_vector_buckets(maxResults=50)
-            vectorBuckets = response.get('vectorBuckets', [])
-        else:
-            logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is already exists.")
-        
-        # Resolve ARN for the target bucket
-        for vectorBucket in vectorBuckets:
-            if vectorBucket.get('vectorBucketName') == s3_vector_bucket_name:
-                s3_vector_bucket_arn = vectorBucket.get('vectorBucketArn', '')
-                logger.info(f"s3_vector_bucket_arn: {s3_vector_bucket_arn}")
-                break
-        if not s3_vector_bucket_arn:
-            logger.error("Failed to resolve s3_vector_bucket_arn after creation/list. Aborting.")
-            raise ValueError("s3_vector_bucket_arn is empty")
-        
-        update_config('s3_vector_bucket_name', s3_vector_bucket_name)
-        update_config('s3_vector_bucket_arn', s3_vector_bucket_arn)
-            
-    s3_vector_index_name = config.get('s3_vector_index_name', "")    
-    logger.info(f"s3_vector_index_name: {s3_vector_index_name}")
-    s3_vector_index_arn = config.get('s3_vector_index_arn', "")
-    logger.info(f"s3_vector_index_arn: {s3_vector_index_arn}")
-    
-    if not s3_vector_index_name or not s3_vector_index_arn:
-        s3_vector_index_name = f"s3-vector-index-for-{projectName}-{accountId}-{aws_region}"
-        logger.info(f"s3_vector_index_name: {s3_vector_index_name}")
-        update_config('s3_vector_index_name', s3_vector_index_name)
-        
-        response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
-        indexes = response.get('indexes', [])
-        
-        if not any(index['indexName'] == s3_vector_index_name for index in indexes):
-            response = client.create_index(
-                vectorBucketArn=s3_vector_bucket_arn,
-                indexName=s3_vector_index_name,
-                dataType='float32',
-                dimension=1024,
-                distanceMetric='cosine'                
-            )
-            logger.info(f"response of create_index: {response}")
-            
-            logger.info(f"{s3_vector_index_name} is created.")
-        else:
-            logger.info(f"{s3_vector_index_name} is already exists.")
-        
-        response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
-        indexes = response.get('indexes', [])
-        for index in indexes:
-            if index['indexName'] == s3_vector_index_name:
-                s3_vector_index_arn = index['indexArn']
-                logger.info(f"s3_vector_index_arn: {s3_vector_index_arn}")
-                break
-        
-        update_config('s3_vector_index_arn', s3_vector_index_arn)
-    
-    # Create knowledge base
-    parsingModelArn = f"arn:aws:bedrock:{aws_region}::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
-    embeddingModelArn = f"arn:aws:bedrock:{aws_region}::foundation-model/amazon.titan-embed-text-v2:0"
-    
-    knowledge_base_name = projectName
-    knowledge_base_id = config.get('knowledge_base_id', "")
-    logger.info(f"knowledge_base_id: {knowledge_base_id}")  
-    
-    if not knowledge_base_id:
-        bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
-        response = bedrock_agent.list_knowledge_bases(maxResults=50)
-        knowledge_bases = response.get('knowledgeBaseSummaries', [])
-        if not any(knowledge_base['name'] == knowledge_base_name for knowledge_base in knowledge_bases):
-            logger.info(f"knowledge_base_name: {knowledge_base_name} is not exists.")
-            response = bedrock_agent.create_knowledge_base(
-                name=knowledge_base_name,
-                description=f"Knowledge base for {projectName} using s3 vector",
-                roleArn=role_arn,
-                knowledgeBaseConfiguration={
-                    "type": "VECTOR",
-                    "vectorKnowledgeBaseConfiguration": {
-                        "embeddingModelArn": embeddingModelArn, 
-                        "embeddingModelConfiguration": {
-                            "bedrockEmbeddingModelConfiguration": {
-                                "dimensions": 1024,
-                                "embeddingDataType": "FLOAT32"
-                            }
-                        },
-                        "supplementalDataStorageConfiguration": {
-                            "storageLocations": [
-                                {
-                                    "s3Location": {
-                                        "uri": f"s3://{bucket_name}"
-                                    },
-                                    "type": "S3"
-                                }
-                            ]
-                        }
-                    }
-                },
-                storageConfiguration={
-                    "type": "S3_VECTORS",
-                    "s3VectorsConfiguration": {
-                        "vectorBucketArn": s3_vector_bucket_arn,
-                        "indexArn": s3_vector_index_arn
-                    }
-                }
-            )
-            # Extract the actual knowledge base ID from the response
-            knowledge_base_id = response['knowledgeBase']['knowledgeBaseId']
-            update_config('knowledge_base_id', knowledge_base_id)
-            logger.info(f"knowledge_base_id: {knowledge_base_id}")
-            
-        else:
-            logger.info(f"knowledge_base_name: {knowledge_base_name} is already exists.")
-            for knowledge_base in knowledge_bases:
-                if knowledge_base['name'] == knowledge_base_name:
-                    knowledge_base_id = knowledge_base['knowledgeBaseId']
-                    update_config('knowledge_base_id', knowledge_base_id)
-                    logger.info(f"knowledge_base_id: {knowledge_base_id}")
-                    break
-    else:
-        logger.info(f"knowledge_base_id: {knowledge_base_id} is already exists.")
-    
-    # data source of knowledge base 
-    data_source_name = config.get('data_source_name', "")
-    logger.info(f"data_source_name: {data_source_name}")
-    if not data_source_name:
-        data_source_name = f"data-source-for-{projectName}-{aws_region}"
-        update_config('data_source_name', data_source_name)
-        logger.info(f"data_source_name: {data_source_name}")
-        
-        bedrock_agent = boto3.client('bedrock-agent', region_name=aws_region)
-        response = bedrock_agent.list_data_sources(knowledgeBaseId=knowledge_base_id)
-        data_sources = response.get('dataSources', [])
-        logger.info(f"data_sources: {data_sources}")
-        
-        # Check if data source exists
-        existing_data_source = None
-        for data_source in data_sources:
-            if data_source.get('dataSourceName') == data_source_name:
-                existing_data_source = data_source
-                break
-        
-        if not existing_data_source:
-            try:
-                response = bedrock_agent.create_data_source(
-                    knowledgeBaseId=knowledge_base_id,
-                    name=data_source_name,
-                    description=f"Data source for {projectName} using s3 vector",
-                    dataSourceConfiguration={
-                        "type": "S3",
-                        "s3Configuration": {
-                            "bucketArn": f"arn:aws:s3:::{bucket_name}",
-                            "inclusionPrefixes": ["docs/"]
-                        }
-                    },
-                    dataDeletionPolicy="RETAIN",
-                    vectorIngestionConfiguration={
-                        'parsingConfiguration': {
-                            'bedrockFoundationModelConfiguration': {
-                                'modelArn': parsingModelArn,
-                                'parsingModality': 'MULTIMODAL'
-                            },
-                            'parsingStrategy': 'BEDROCK_FOUNDATION_MODEL'
-                        }
-                    }
-                )
-                logger.info(f"Created data source: {data_source_name}")
-            except Exception as e:
-                if "already exists" in str(e):
-                    logger.info(f"Data source {data_source_name} already exists.")
-                else:
-                    logger.error(f"Failed to create data source: {e}")
-                    raise e
-        else:
-            logger.info(f"Data source {data_source_name} already exists.")
-    
-    return knowledge_base_id
-
-def setup_knowledge_base(config):
-    """Setup Knowledge Base if needed"""
-    knowledge_base_id = config.get('knowledge_base_id', "")
-    print(f"knowledge_base_id: {knowledge_base_id}")
-    
-    if not knowledge_base_id:
-        print(f"knowledge_base_id is required. Creating Knowledge Base...")
-        knowledge_base_name = config.get('projectName')
-        print(f"knowledge_base_name: {knowledge_base_name}")
-        knowledge_base_id = create_knowledge_base(config)
-        print(f"✓ Knowledge Base created: {knowledge_base_id}")
-    else:
-        print(f"✓ Knowledge Base already exists: {knowledge_base_id}")
-    
-    return knowledge_base_id
 
 # ============================================================================
 # Agent Runtime Creation/Update Functions
@@ -1306,13 +1031,28 @@ def get_latest_image_tag(config):
         project_name = config.get('projectName')
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
-        
+        # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
+        repository_name = repository_name.replace('-', '_')
+                
         ecr_client = boto3.client('ecr', region_name=aws_region)
+        
+        # Check if repository exists first
+        try:
+            ecr_client.describe_repositories(repositoryNames=[repository_name])
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'RepositoryNotFoundException':
+                print(f"Error: ECR repository '{repository_name}' does not exist.")
+                print(f"Please run the Docker build and push step first to create the repository.")
+                return None
+            else:
+                raise
+        
         response = ecr_client.describe_images(repositoryName=repository_name)
         images = response['imageDetails']
         
         if not images:
             print(f"Error: No images found in repository {repository_name}")
+            print(f"Please run the Docker build and push step first to push an image.")
             return None
         
         # Get latest image
@@ -1327,6 +1067,13 @@ def get_latest_image_tag(config):
         print(f"Latest image tag: {image_tag}")
         return image_tag
         
+    except ClientError as e:
+        if e.response['Error']['Code'] == 'RepositoryNotFoundException':
+            print(f"Error: ECR repository '{repository_name}' does not exist.")
+            print(f"Please run the Docker build and push step first to create the repository.")
+        else:
+            print(f"Error getting latest image tag: {e}")
+        return None
     except Exception as e:
         print(f"Error getting latest image tag: {e}")
         return None
@@ -1354,26 +1101,27 @@ def create_agent_runtime_func(config, repository_name, image_tag):
     # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
     runtime_name = repository_name.replace('-', '_')
     
+    # Check if Cognito configuration exists for JWT Authorizer
+    cognito_config = config.get('cognito', {})
+    if not cognito_config.get('client_id') or not cognito_config.get('discovery_url'):
+        print("Error: Cognito configuration not found in config.json")
+        print("Please run Cognito setup step first")
+        return None
+    
     try:
         client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
         
-        # Prepare create parameters
-        create_params = {
-            'agentRuntimeName': runtime_name,
-            'agentRuntimeArtifact': {
+        response = client.create_agent_runtime(
+            agentRuntimeName=runtime_name,
+            agentRuntimeArtifact={
                 'containerConfiguration': {
                     'containerUri': f"{account_id}.dkr.ecr.{aws_region}.amazonaws.com/{repository_name}:{image_tag}"
                 }
             },
-            'networkConfiguration': {"networkMode": "PUBLIC"}, 
-            'roleArn': agent_runtime_role,
-            'protocolConfiguration': {"serverProtocol": "MCP"}
-        }
-        
-        # Add authorizer configuration if Cognito is configured
-        cognito_config = config.get('cognito', {})
-        if cognito_config.get('client_id') and cognito_config.get('discovery_url'):
-            create_params['authorizerConfiguration'] = {
+            networkConfiguration={"networkMode": "PUBLIC"}, 
+            roleArn=agent_runtime_role,
+            protocolConfiguration={"serverProtocol": "MCP"},
+            authorizerConfiguration={
                 "customJWTAuthorizer": {
                     "allowedClients": [
                         cognito_config['client_id']
@@ -1381,9 +1129,7 @@ def create_agent_runtime_func(config, repository_name, image_tag):
                     "discoveryUrl": cognito_config['discovery_url']
                 }
             }
-            print("✓ Adding JWT authorizer configuration")
-        
-        response = client.create_agent_runtime(**create_params)
+        )
         
         print(f"✓ Agent runtime created: {response['agentRuntimeArn']}")
         return response['agentRuntimeArn']
@@ -1409,10 +1155,22 @@ def update_agent_runtime_func(config, repository_name, agent_runtime_id, image_t
         print("Error: agent_runtime_role not found in config.json")
         return None
     
+    # Check if Cognito configuration exists for JWT Authorizer
+    cognito_config = config.get('cognito', {})
+    authorizer_config = None
+    if cognito_config.get('client_id') and cognito_config.get('discovery_url'):
+        authorizer_config = {
+            "customJWTAuthorizer": {
+                "allowedClients": [
+                    cognito_config['client_id']
+                ],
+                "discoveryUrl": cognito_config['discovery_url']
+            }
+        }
+    
     try:
         client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
         
-        # Prepare update parameters
         update_params = {
             'agentRuntimeId': agent_runtime_id,
             'description': "Update agent runtime",
@@ -1427,17 +1185,8 @@ def update_agent_runtime_func(config, repository_name, agent_runtime_id, image_t
         }
         
         # Add authorizer configuration if Cognito is configured
-        cognito_config = config.get('cognito', {})
-        if cognito_config.get('client_id') and cognito_config.get('discovery_url'):
-            update_params['authorizerConfiguration'] = {
-                "customJWTAuthorizer": {
-                    "allowedClients": [
-                        cognito_config['client_id']
-                    ],
-                    "discoveryUrl": cognito_config['discovery_url']
-                }
-            }
-            print("✓ Adding JWT authorizer configuration")
+        if authorizer_config:
+            update_params['authorizerConfiguration'] = authorizer_config
         
         response = client.update_agent_runtime(**update_params)
         
@@ -1459,30 +1208,24 @@ def create_agent_runtime():
         aws_region = config['region']
         project_name = config.get('projectName')
         
-        # Setup Knowledge Base if needed (from create_mcp_runtime.py)
-        print("\n1. Setting up Knowledge Base...")
-        knowledge_base_id = setup_knowledge_base(config)
-        
-        # Update knowledge_base_name if not set
-        knowledge_base_name = config.get("knowledge_base_name", "")
-        if not knowledge_base_name:
-            knowledge_base_name = project_name
-            update_config('knowledge_base_name', knowledge_base_name)
-        
         # Get current folder name
         current_folder_name = os.path.basename(os.getcwd())
         repository_name = f"{project_name}_{current_folder_name}"
         
         # Convert hyphens to underscores for agent runtime name (AWS validation requirement)
-        runtime_name = repository_name.replace('-', '_')
+        repository_name = repository_name.replace('-', '_')
         
         print(f"\n2. Repository name: {repository_name}")
-        print(f"   Agent runtime name: {runtime_name}")
+        print(f"   Agent runtime name: {repository_name}")
         
         # Get latest image tag
         image_tag = get_latest_image_tag(config)
         if not image_tag:
-            print("Error: Could not get latest image tag")
+            print("\nError: Could not get latest image tag")
+            print("This usually means:")
+            print("  1. The ECR repository does not exist yet")
+            print("  2. No Docker images have been pushed to the repository")
+            print("\nPlease ensure the 'Building Docker image and pushing to ECR' step completed successfully.")
             return False
         
         print(f"Using image tag: {image_tag}")
@@ -1496,8 +1239,8 @@ def create_agent_runtime():
         agent_runtime_id = None
         
         for agent_runtime in agent_runtimes:
-            if agent_runtime['agentRuntimeName'] == runtime_name:
-                print(f"Agent runtime {runtime_name} already exists")
+            if agent_runtime['agentRuntimeName'] == repository_name:
+                print(f"Agent runtime {repository_name} already exists")
                 is_exist = True
                 agent_runtime_id = agent_runtime['agentRuntimeId']
                 break
@@ -1505,10 +1248,10 @@ def create_agent_runtime():
         # Create or update agent runtime
         print("\n3. Creating/updating Agent Runtime...")
         if is_exist:
-            print(f"Updating agent runtime: {runtime_name}")
+            print(f"Updating agent runtime: {repository_name}")
             agent_runtime_arn = update_agent_runtime_func(config, repository_name, agent_runtime_id, image_tag)
         else:
-            print(f"Creating agent runtime: {runtime_name}")
+            print(f"Creating agent runtime: {repository_name}")
             agent_runtime_arn = create_agent_runtime_func(config, repository_name, image_tag)
         
         if not agent_runtime_arn:

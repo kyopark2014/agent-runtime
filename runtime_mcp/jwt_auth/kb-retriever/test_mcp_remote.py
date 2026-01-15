@@ -3,9 +3,21 @@ import os
 import json
 import boto3
 import requests
+import sys
+import logging
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+
+# Setup logging for Knowledge Base functions
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(filename)s:%(lineno)d | %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger("installer")
 
 def load_config():
     config = None
@@ -48,11 +60,11 @@ def create_cognito_bearer_token(config):
         access_token = auth_result['AccessToken']
         # id_token = auth_result['IdToken']
         
-        print("Successfully obtained fresh Cognito tokens")
+        logging.info("Successfully obtained fresh Cognito tokens")
         return access_token
         
     except Exception as e:
-        print(f"Error getting Cognito token: {e}")
+        logging.info(f"Error getting Cognito token: {e}")
         return None
 
 def get_bearer_token():
@@ -68,11 +80,11 @@ def get_bearer_token():
             bearer_token = token_data['bearer_token']
             return bearer_token
         else:
-            print("No bearer token found in secret manager")
+            logging.info("No bearer token found in secret manager")
             return None
     
     except Exception as e:
-        print(f"Error getting stored token: {e}")
+        logging.info(f"Error getting stored token: {e}")
         return None
 
 def save_bearer_token(secret_name, bearer_token):
@@ -97,7 +109,7 @@ def save_bearer_token(secret_name, bearer_token):
                 SecretId=secret_name,
                 SecretString=secret_string
             )
-            print(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
+            logging.info(f"Bearer token updated in secret manager with key: {secret_value['bearer_key']}")
         except client.exceptions.ResourceNotFoundException:
             # Secret doesn't exist, create it
             client.create_secret(
@@ -105,10 +117,10 @@ def save_bearer_token(secret_name, bearer_token):
                 SecretString=secret_string,
                 Description="MCP Server Cognito credentials with bearer key and token"
             )
-            print(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
+            logging.info(f"Bearer token created in secret manager with key: {secret_value['bearer_key']}")
             
     except Exception as e:
-        print(f"Error saving bearer token: {e}")
+        logging.info(f"Error saving bearer token: {e}")
         # Continue execution even if saving fails
 
 async def main():
@@ -117,26 +129,26 @@ async def main():
     
     # Check if agent_arn is properly configured
     if not agent_arn:
-        print("Error: agent_runtime_arn is not configured in config.json")
-        print("Please set the agent_runtime_arn value in config.json to your AWS Bedrock Agent Runtime ARN")
+        logging.info("Error: agent_runtime_arn is not configured in config.json")
+        logging.info("Please set the agent_runtime_arn value in config.json to your AWS Bedrock Agent Runtime ARN")
         return
     
     # Check basic AWS connectivity
     bearer_token = get_bearer_token()
-    print(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
-    #print(f"Bearer token from secret manager: {bearer_token}")
+    logging.info(f"Bearer token from secret manager: {bearer_token[:100] if bearer_token else 'None'}...")
+    #logging.info(f"Bearer token from secret manager: {bearer_token}")
 
     if not bearer_token:    
         # Try to get fresh bearer token from Cognito
-        print("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
+        logging.info("No bearer token found in secret manager, getting fresh bearer token from Cognito...")
         bearer_token = create_cognito_bearer_token(config)
-        print(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
+        logging.info(f"Bearer token from cognito: {bearer_token[:100] if bearer_token else 'None'}...")
         
         if bearer_token:
             secret_name = config['secret_name']
             save_bearer_token(secret_name, bearer_token)
         else:
-            print("Failed to get bearer token from Cognito. Exiting.")
+            logging.info("Failed to get bearer token from Cognito. Exiting.")
             return
                 
     encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
@@ -177,18 +189,19 @@ async def main():
         )
         
         if response.status_code == 200:
-            print("Success!")
+            logging.info("Success!")
             successful_url = mcp_url
             successful_headers = headers            
         else:
-            print(f"Error: {response.status_code}")
-            print(f"Response body: {response.text}")
-            if response.status_code == 403:
-                print("403 Forbidden - Token may be expired, trying to get fresh token from Cognito...")
+            logging.info(f"Error: {response.status_code}")
+            logging.info(f"Response body: {response.text}")
+            if response.status_code == 401 or response.status_code == 403:
+                error_msg = "401 Unauthorized" if response.status_code == 401 else "403 Forbidden"
+                logging.info(f"{error_msg} - Token may be expired, trying to get fresh token from Cognito...")
                 # Try to get fresh bearer token from Cognito
                 fresh_bearer_token = create_cognito_bearer_token(config)
                 if fresh_bearer_token:
-                    print("Successfully obtained fresh token, updating headers and retrying...")
+                    logging.info("Successfully obtained fresh token, updating headers and retrying...")
                     # Update headers with fresh token
                     headers["Authorization"] = f"Bearer {fresh_bearer_token}"
                     # Save the fresh token
@@ -204,128 +217,101 @@ async def main():
                     )
                     
                     if response.status_code == 200:
-                        print("Success with fresh token!")
+                        logging.info("Success with fresh token!")
                         successful_url = mcp_url
                         successful_headers = headers
                     else:
-                        print(f"Still getting error with fresh token: {response.status_code}")
-                        print(f"Response body: {response.text}")
+                        logging.info(f"Still getting error with fresh token: {response.status_code}")
+                        logging.info(f"Response body: {response.text}")
                         return
                 else:
-                    print("Failed to get fresh token from Cognito")
+                    logging.info("Failed to get fresh token from Cognito")
                     return
             else:
                 return
     except Exception as e:
-        print(f"Connection failed: {e}")
+        logging.info(f"Connection failed: {e}")
         return
 
     if not successful_url or not successful_headers:
-        print("Failed to establish successful connection. Exiting.")
+        logging.info("Failed to establish successful connection. Exiting.")
         return
 
     mcp_url = successful_url
     headers = successful_headers
 
     try:
-        print(f"\n=== Attempting MCP Connection ===")
-        print(f"URL: {mcp_url}")
-        print(f"Timeout: 120 seconds")
+        logging.info(f"\n=== Attempting MCP Connection ===")
+        logging.info(f"URL: {mcp_url}")
+        logging.info(f"Timeout: 120 seconds")
         
         # Now try the MCP connection with better error handling
-        print("1. Attempting streamablehttp_client connection...")
+        logging.info("1. Attempting streamablehttp_client connection...")
         async with streamablehttp_client(mcp_url, headers, timeout=120, terminate_on_close=False) as (
             read_stream, write_stream, _):
             
-            print("2. streamablehttp_client connection successful!")
-            print("3. Creating ClientSession...")
+            logging.info("2. streamablehttp_client connection successful!")
+            logging.info("3. Creating ClientSession...")
             
             async with ClientSession(read_stream, write_stream) as session:
-                print("4. ClientSession created successfully!")
-                print("5. Calling session.initialize()...")
+                logging.info("4. ClientSession created successfully!")
+                logging.info("5. Calling session.initialize()...")
                 
                 # Add timeout for initialize
                 try:
                     await asyncio.wait_for(session.initialize(), timeout=30)
-                    print("6. session.initialize() successful!")
+                    logging.info("6. session.initialize() successful!")
                 except asyncio.TimeoutError:
-                    print("session.initialize() timeout (30s)")
+                    logging.info("session.initialize() timeout (30s)")
                     return
                 except Exception as init_error:
-                    print(f"session.initialize() failed: {init_error}")
+                    logging.info(f"session.initialize() failed: {init_error}")
                     return
                 
-                print("7. Calling session.list_tools()...")
+                logging.info("7. Calling session.list_tools()...")
                 
                 # Add timeout for list_tools
                 try:
                     tool_result = await asyncio.wait_for(session.list_tools(), timeout=30)
-                    print(f"8. session.list_tools() successful!")
-                    print(f"\nAvailable tools: {len(tool_result.tools)}")
+                    logging.info(f"8. session.list_tools() successful!")
+                    logging.info(f"\nAvailable tools: {len(tool_result.tools)}")
                     for tool in tool_result.tools:
-                        print(f"  - {tool.name}: {tool.description[:100]}...")
+                        logging.info(f"  - {tool.name}: {tool.description[:100]}...")
                 except asyncio.TimeoutError:
-                    print("session.list_tools() timeout (30s)")
+                    logging.info("session.list_tools() timeout (30s)")
                     return
                 except Exception as tools_error:
-                    print(f"session.list_tools() failed: {tools_error}")
+                    logging.info(f"session.list_tools() failed: {tools_error}")
                     return
                                 
-                # Test AWS S3 bucket list retrieval
-                print("\n=== Testing AWS S3 List Buckets ===")
-                s3_params = {
-                    "service_name": "s3",
-                    "operation_name": "list_buckets",
-                    "parameters": {},
-                    "region": "us-west-2",
-                    "label": "List S3 buckets"
+                # Test retrieve function
+                logging.info("\n=== Testing retrieve function ===")
+                params = {
+                    "keyword": "보일러 에러 코드"
                 }
                 
-                print("8. S3 list_buckets 호출 중...")
+                logging.info("8. retrieve 호출 중...")
                 try:
-                    result = await asyncio.wait_for(session.call_tool("use_aws", s3_params), timeout=60)
-                    print(f"10. S3 list_buckets 성공!")
-                    print(f"Result: {result}")
+                    result = await asyncio.wait_for(session.call_tool("retrieve", params), timeout=30)
+                    logging.info(f"9. retrieve 성공!")
+                    logging.info(f"Result: {result}")
                     
                     if hasattr(result, 'content') and result.content:
                         for content in result.content:
                             if hasattr(content, 'text'):
-                                print(f"Content: {content.text}")
+                                logging.info(f"Content: {content.text}")
+                    else:
+                        logging.info("No content in result")
                 except asyncio.TimeoutError:
-                    print("❌ S3 list_buckets 타임아웃 (60초)")
-                except Exception as s3_error:
-                    print(f"❌ S3 list_buckets 실패: {s3_error}")
+                    logging.info("retrieve function timeout (30s)")
+                except Exception as retrieve_error:
+                    logging.info(f"retrieve function failed: {retrieve_error}")
                 
-                # Test AWS EC2 instance list retrieval
-                print("\n=== Testing AWS EC2 Describe Instances ===")
-                ec2_params = {
-                    "service_name": "ec2",
-                    "operation_name": "describe_instances",
-                    "parameters": {"MaxResults": 5},
-                    "region": "us-west-2",
-                    "label": "List EC2 instances"
-                }
-                
-                print("9. EC2 describe_instances 호출 중...")
-                try:
-                    result = await asyncio.wait_for(session.call_tool("use_aws", ec2_params), timeout=60)
-                    print(f"12. EC2 describe_instances 성공!")
-                    print(f"Result: {result}")
-                    
-                    if hasattr(result, 'content') and result.content:
-                        for content in result.content:
-                            if hasattr(content, 'text'):
-                                print(f"Content: {content.text}")
-                except asyncio.TimeoutError:
-                    print("❌ EC2 describe_instances 타임아웃 (60초)")
-                except Exception as ec2_error:
-                    print(f"❌ EC2 describe_instances 실패: {ec2_error}")
-                
-                print("\n=== MCP Connection Test Complete ===")
+                logging.info("\n=== MCP Connection Test Complete ===")
                                 
     except Exception as e:
-        print(f"MCP connection failed: {e}")
-        print(f"Error type: {type(e)}")
+        logging.info(f"MCP connection failed: {e}")
+        logging.info(f"Error type: {type(e)}")
         import traceback
         traceback.print_exc()
         

@@ -4,16 +4,26 @@ import json
 import boto3
 import requests
 import httpx
-from datetime import datetime, timezone
+import logging
+import sys
 
+from datetime import datetime, timezone
 from botocore.auth import SigV4Auth as BotocoreSigV4Auth
 from botocore.awsrequest import AWSRequest
-
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
-
 from urllib.parse import urlparse
             
+# Setup logging for Knowledge Base functions
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(filename)s:%(lineno)d | %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stderr)
+    ]
+)
+logger = logging.getLogger("installer")
+
 def load_config():
     config = None
     
@@ -151,7 +161,7 @@ async def main():
     
     # Try different endpoint URLs based on common patterns
     mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
-    print(f"MCP URL: {mcp_url}")
+    logging.info(f"MCP URL: {mcp_url}")
 
     # Prepare the request body for MCP initialization
     request_body = json.dumps({
@@ -170,7 +180,7 @@ async def main():
     
     # Generate SigV4 headers for the request
     headers = get_sigv4_headers("POST", mcp_url, request_body.encode('utf-8'), region)
-    print(f"Headers: {headers}")
+    logging.info(f"Headers: {headers}")
     
     successful_url = None
     successful_headers = None
@@ -185,31 +195,31 @@ async def main():
         )
         
         if response.status_code == 200:
-            print("Success!")
+            logging.info("Success!")
             successful_url = mcp_url
             successful_headers = headers            
         else:
-            print(f"Error: {response.status_code}")
-            print(f"Response body: {response.text}")
+            logging.info(f"Error: {response.status_code}")
+            logging.info(f"Response body: {response.text}")
             return
     except Exception as e:
-        print(f"Connection failed: {e}")
+        logging.info(f"Connection failed: {e}")
         return
 
     if not successful_url or not successful_headers:
-        print("Failed to establish successful connection. Exiting.")
+        logging.info("Failed to establish successful connection. Exiting.")
         return
 
     mcp_url = successful_url
     headers = successful_headers
 
     try:
-        print(f"\n=== Attempting MCP Connection ===")
-        print(f"URL: {mcp_url}")
-        print(f"Timeout: 120 seconds")
+        logging.info(f"\n=== Attempting MCP Connection ===")
+        logging.info(f"URL: {mcp_url}")
+        logging.info(f"Timeout: 120 seconds")
         
         # Now try the MCP connection with better error handling
-        print("1. Attempting streamable_http_client connection...")
+        logging.info("1. Attempting streamable_http_client connection...")
                 
         # Use event hooks for signing
         http_client = httpx.AsyncClient(
@@ -220,68 +230,68 @@ async def main():
         async with streamable_http_client(mcp_url, http_client=http_client, terminate_on_close=False) as (
             read_stream, write_stream, _):
             
-            print("2. streamable_http_client connection successful!")
-            print("3. Creating ClientSession...")
+            logging.info("2. streamable_http_client connection successful!")
+            logging.info("3. Creating ClientSession...")
             
             async with ClientSession(read_stream, write_stream) as session:
-                print("4. ClientSession created successfully!")
-                print("5. Calling session.initialize()...")
+                logging.info("4. ClientSession created successfully!")
+                logging.info("5. Calling session.initialize()...")
                 
                 # Add timeout for initialize
                 try:
                     await asyncio.wait_for(session.initialize(), timeout=60)
-                    print("6. session.initialize() successful!")
+                    logging.info("6. session.initialize() successful!")
                 except asyncio.TimeoutError:
-                    print("session.initialize() timeout (60s)")
+                    logging.info("session.initialize() timeout (60s)")
                     return
                 except Exception as init_error:
-                    print(f"session.initialize() failed: {init_error}")
-                    print(f"Error type: {type(init_error)}")
+                    logging.info(f"session.initialize() failed: {init_error}")
+                    logging.info(f"Error type: {type(init_error)}")
                     return
                 
-                print("7. Calling session.list_tools()...")
+                logging.info("7. Calling session.list_tools()...")
                 
                 # Add timeout for list_tools
                 try:
                     tool_result = await asyncio.wait_for(session.list_tools(), timeout=60)
-                    print(f"8. session.list_tools() successful!")
-                    print(f"\nAvailable tools: {len(tool_result.tools)}")
+                    logging.info(f"8. session.list_tools() successful!")
+                    logging.info(f"\nAvailable tools: {len(tool_result.tools)}")
                     for tool in tool_result.tools:
-                        print(f"  - {tool.name}: {tool.description[:100]}...")
+                        logging.info(f"  - {tool.name}: {tool.description[:100]}...")
                 except asyncio.TimeoutError:
-                    print("session.list_tools() timeout (60s)")
+                    logging.info("session.list_tools() timeout (60s)")
                     return
                 except Exception as tools_error:
-                    print(f"session.list_tools() failed: {tools_error}")
-                    print(f"Error type: {type(tools_error)}")
+                    logging.info(f"session.list_tools() failed: {tools_error}")
+                    logging.info(f"Error type: {type(tools_error)}")
                     return
                                 
                 # Test retrieve function
-                print("\n=== Testing retrieve function ===")
+                logging.info("\n=== Testing retrieve function ===")
                 params = {
                     "keyword": "보일러 에러 코드"
                 }
                 
                 try:
                     result = await asyncio.wait_for(session.call_tool("retrieve", params), timeout=30)
-                    print(f"retrieve result: {result}")
+                    logging.info(f"retrieve result: {result}")
                     
                     if hasattr(result, 'content') and result.content:
                         for content in result.content:
                             if hasattr(content, 'text'):
-                                print(f"Content: {content.text}")
+                                logging.info(f"Content: {content.text}")
                     else:
-                        print("No content in result")
+                        logging.info("No content in result")
                 except asyncio.TimeoutError:
-                    print("retrieve function timeout (30s)")
+                    logging.info("retrieve function timeout (30s)")
                 except Exception as retrieve_error:
-                    print(f"retrieve function failed: {retrieve_error}")
+                    logging.info(f"retrieve function failed: {retrieve_error}")
                                 
-                print("\n=== MCP Connection Test Complete ===")
+                logging.info("\n=== MCP Connection Test Complete ===")
                 
     except Exception as e:
-        print(f"MCP connection failed: {e}")
-        print(f"Error type: {type(e)}")
+        logging.info(f"MCP connection failed: {e}")
+        logging.info(f"Error type: {type(e)}")
         import traceback
         traceback.print_exc()
         

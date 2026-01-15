@@ -11,9 +11,13 @@ import logging
 import argparse
 import base64
 import ipaddress
+import subprocess
+import shutil
+import os
+import sys
 from datetime import datetime
 from typing import Dict, List, Optional
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError
 import urllib.request
 import urllib.error
 
@@ -2591,6 +2595,22 @@ def create_lambda_role() -> str:
     return role_arn
 
 
+def check_knowledge_base_exists() -> Optional[str]:
+    """Check if Knowledge Base exists and return its ID if found."""
+    bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
+    
+    try:
+        kb_list = bedrock_agent_client.list_knowledge_bases()
+        for kb in kb_list.get("knowledgeBaseSummaries", []):
+            if kb["name"] == project_name:
+                logger.debug(f"Knowledge Base found: {kb['knowledgeBaseId']}")
+                return kb["knowledgeBaseId"]
+        return None
+    except Exception as e:
+        logger.debug(f"Error checking Knowledge Base existence: {e}")
+        return None
+
+
 def delete_knowledge_base(knowledge_base_id: str) -> None:
     """Delete Knowledge Base and its data sources."""
     bedrock_agent_client = boto3.client("bedrock-agent", region_name=region)
@@ -3069,7 +3089,7 @@ def create_cloudfront_distribution(alb_info: Dict[str, str], s3_bucket_name: str
     logger.info("  Creating CloudFront distribution with ALB and S3 origins...")
     distribution_config = {
         "CallerReference": f"{project_name}-{int(time.time())}",
-        "Comment": f"CloudFront-for-{project_name}-Hybrid",
+        "Comment": f"CloudFront-for-{project_name}",
         "DefaultCacheBehavior": {
             "TargetOriginId": f"alb-{project_name}",
             "ViewerProtocolPolicy": "redirect-to-https",
@@ -3823,6 +3843,78 @@ def verify_ec2_subnet_deployment():
     except Exception as e:
         logger.debug(f"Could not verify EC2 deployment: {e}")
 
+def install_agent_runtime(runtime_type: str = "langgraph") -> bool:
+    """Install Agent Runtime by running the appropriate installer.py script."""
+    logger.info(f"[11/10] Installing Agent Runtime: {runtime_type}")
+    
+    # Determine installer path based on runtime type
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    if runtime_type == "langgraph":
+        installer_path = os.path.join(script_dir, "runtime_agent", "langgraph", "installer.py")
+    else:
+        logger.error(f"Unknown Agent Runtime type: {runtime_type}")
+        return False
+    
+    if not os.path.exists(installer_path):
+        logger.error(f"Installer not found: {installer_path}")
+        return False
+    
+    try:
+        logger.info(f"Running installer: {installer_path}")
+        result = subprocess.run(
+            [sys.executable, installer_path],
+            cwd=os.path.dirname(installer_path),
+            check=True,
+            capture_output=False
+        )
+        logger.info(f"✓ Agent Runtime ({runtime_type}) installation completed")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to install Agent Runtime ({runtime_type}): {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error installing Agent Runtime ({runtime_type}): {e}")
+        return False
+
+
+def install_mcp_runtime(mcp_type: str) -> bool:
+    """Install MCP Runtime by running the appropriate installer.py script."""
+    logger.info(f"[11/10] Installing MCP Runtime: {mcp_type}")
+    
+    # Determine installer path based on MCP type
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    if mcp_type == "kb-retriever":
+        installer_path = os.path.join(script_dir, "runtime_mcp", "iam_auth", "kb-retriever", "installer.py")
+    elif mcp_type == "use-aws":
+        installer_path = os.path.join(script_dir, "runtime_mcp", "iam_auth", "use-aws", "installer.py")
+    else:
+        logger.error(f"Unknown MCP Runtime type: {mcp_type}")
+        return False
+    
+    if not os.path.exists(installer_path):
+        logger.error(f"Installer not found: {installer_path}")
+        return False
+    
+    try:
+        logger.info(f"Running installer: {installer_path}")
+        result = subprocess.run(
+            [sys.executable, installer_path],
+            cwd=os.path.dirname(installer_path),
+            check=True,
+            capture_output=False
+        )
+        logger.info(f"✓ MCP Runtime ({mcp_type}) installation completed")
+        return True
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to install MCP Runtime ({mcp_type}): {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error installing MCP Runtime ({mcp_type}): {e}")
+        return False
+
+
 def check_application_ready(domain: str, max_attempts: int = 120, wait_seconds: int = 10) -> None:
     """Check if the application is ready by making HTTP requests to the CloudFront domain.
     
@@ -3909,6 +4001,18 @@ def main():
         action="store_true",
         help="Verify that existing EC2 instances are properly deployed in private subnets"
     )
+    parser.add_argument(
+        "--install-agent-runtime",
+        metavar="RUNTIME_TYPE",
+        nargs="?",
+        const="langgraph",
+        help="Install Agent Runtime. RUNTIME_TYPE can be 'langgraph' (default)."
+    )
+    parser.add_argument(
+        "--install-mcp-runtime",
+        metavar="MCP_TYPE",
+        help="Install MCP Runtime. MCP_TYPE can be 'kb-retriever' or 'use-aws'."
+    )
     
     args = parser.parse_args()
     
@@ -3922,6 +4026,17 @@ def main():
     if args.verify_deployment:
         verify_ec2_subnet_deployment()
         return
+    
+    # If --install-agent-runtime flag is provided, install Agent Runtime
+    if args.install_agent_runtime is not None:
+        runtime_type = args.install_agent_runtime if args.install_agent_runtime else "langgraph"
+        success = install_agent_runtime(runtime_type)
+        sys.exit(0 if success else 1)
+    
+    # If --install-mcp-runtime flag is provided, install MCP Runtime
+    if args.install_mcp_runtime:
+        success = install_mcp_runtime(args.install_mcp_runtime)
+        sys.exit(0 if success else 1)
     
     logger.info("="*60)
     logger.info("Starting AWS Infrastructure Deployment")
@@ -3953,9 +4068,14 @@ def main():
         opensearch_info = create_opensearch_collection(ec2_role_arn, knowledge_base_role_arn)
         logger.info(f"OpenSearch collection created...")
         
-        # 4.5. Create Knowledge Base with correct OpenSearch collection        
-        knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
-        logger.info(f"Knowledge base created...")
+        # 4.5. Create Knowledge Base with correct OpenSearch collection (only if it doesn't exist)
+        existing_kb_id = check_knowledge_base_exists()
+        if existing_kb_id:
+            logger.info(f"Knowledge Base already exists: {existing_kb_id}, skipping creation...")
+            knowledge_base_id = existing_kb_id
+        else:
+            knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
+            logger.info(f"Knowledge base created...")
         
         # 5. Create VPC
         vpc_info = create_vpc()

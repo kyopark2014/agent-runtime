@@ -3,7 +3,7 @@ FROM --platform=linux/arm64 python:3.13-slim
 WORKDIR /app
 
 RUN pip install --upgrade boto3 botocore
-RUN pip install mcp langchain-mcp-adapters uv
+RUN pip install mcp langchain-mcp-adapters uv 
 RUN pip install aws-opentelemetry-distro>=0.10.0
 
 # install package for use_aws

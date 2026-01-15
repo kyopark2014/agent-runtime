@@ -13,6 +13,7 @@ import shutil
 import base64
 import boto3
 import logging
+import sys
 from datetime import datetime
 from botocore.exceptions import ClientError, NoCredentialsError
 
@@ -179,6 +180,22 @@ def create_bedrock_agentcore_policy(config):
                 "Effect": "Allow",
                 "Action": [
                     "ec2:*"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "CloudFrontAccess",
+                "Effect": "Allow",
+                "Action": [
+                    "cloudfront:ListDistributions",
+                    "cloudfront:GetDistribution",
+                    "cloudfront:DescribeDistribution",
+                    "cloudfront:ListCloudFrontOriginAccessIdentities",
+                    "cloudfront:GetCloudFrontOriginAccessIdentity",
+                    "cloudfront:ListInvalidations",
+                    "cloudfront:GetInvalidation",
+                    "cloudfront:ListStreamingDistributions",
+                    "cloudfront:GetStreamingDistribution"
                 ],
                 "Resource": "*"
             }

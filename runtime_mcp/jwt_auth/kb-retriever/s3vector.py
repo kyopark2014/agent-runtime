@@ -161,82 +161,68 @@ def create_knowledge_base(knowledge_base_name, region):
     # Create S3 Vector Bucket client
     client = boto3.client('s3vectors', region_name=region)
 
-    s3_vector_bucket_name = config.get('s3_vector_bucket_name', "")
+    s3_vector_bucket_name = f"s3-vector-for-{projectName}-{accountId}-{region}"
     logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name}")
-    s3_vector_bucket_arn = config.get('s3_vector_bucket_arn', "")
-    logger.info(f"s3_vector_bucket_arn: {s3_vector_bucket_arn}")
+            
+    response = client.list_vector_buckets(maxResults=50)
+    vectorBuckets = response.get('vectorBuckets', [])
+    if not any(vectorBucket['vectorBucketName'] == s3_vector_bucket_name for vectorBucket in vectorBuckets):
+        response = client.create_vector_bucket(vectorBucketName=s3_vector_bucket_name)
+        logger.info(f"response of create_vector_bucket: {response}")
 
-    if not s3_vector_bucket_name or not s3_vector_bucket_arn:
-        s3_vector_bucket_name = f"s3-vector-for-{projectName}-{accountId}-{region}"
-        logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name}")
-                
+        logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is created.")
+        # Refresh list to fetch ARN after creation
         response = client.list_vector_buckets(maxResults=50)
         vectorBuckets = response.get('vectorBuckets', [])
-        if not any(vectorBucket['vectorBucketName'] == s3_vector_bucket_name for vectorBucket in vectorBuckets):
-            response = client.create_vector_bucket(vectorBucketName=s3_vector_bucket_name)
-            logger.info(f"response of create_vector_bucket: {response}")
+    else:
+        logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is already exists.")
 
-            logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is created.")
-            # Refresh list to fetch ARN after creation
-            response = client.list_vector_buckets(maxResults=50)
-            vectorBuckets = response.get('vectorBuckets', [])
-        else:
-            logger.info(f"s3_vector_bucket_name: {s3_vector_bucket_name} is already exists.")
-
-        # Resolve ARN for the target bucket
-        for vectorBucket in vectorBuckets:
-            if vectorBucket.get('vectorBucketName') == s3_vector_bucket_name:
-                s3_vector_bucket_arn = vectorBucket.get('vectorBucketArn', '')
-                logger.info(f"s3_vector_bucket_arn: {s3_vector_bucket_arn}")
-                break
-        if not s3_vector_bucket_arn:
-            # As a fallback, try describing the bucket if API exists; otherwise raise
-            logger.error("Failed to resolve s3_vector_bucket_arn after creation/list. Aborting.")
-            raise ValueError("s3_vector_bucket_arn is empty")
+    # Resolve ARN for the target bucket
+    for vectorBucket in vectorBuckets:
+        if vectorBucket.get('vectorBucketName') == s3_vector_bucket_name:
+            s3_vector_bucket_arn = vectorBucket.get('vectorBucketArn', '')
+            logger.info(f"s3_vector_bucket_arn: {s3_vector_bucket_arn}")
+            break
+    if not s3_vector_bucket_arn:
+        # As a fallback, try describing the bucket if API exists; otherwise raise
+        logger.error("Failed to resolve s3_vector_bucket_arn after creation/list. Aborting.")
+        raise ValueError("s3_vector_bucket_arn is empty")
+    
+    config['s3_vector_bucket_name'] = s3_vector_bucket_name        
+    config['s3_vector_bucket_arn'] = s3_vector_bucket_arn
         
-        config['s3_vector_bucket_name'] = s3_vector_bucket_name        
-        config['s3_vector_bucket_arn'] = s3_vector_bucket_arn
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-            
-    s3_vector_index_name = config.get('s3_vector_index_name', "")    
+    s3_vector_index_name = f"s3-vector-index-for-{projectName}-{accountId}-{region}"
     logger.info(f"s3_vector_index_name: {s3_vector_index_name}")
-    s3_vector_index_arn = config.get('s3_vector_index_arn', "")
-    logger.info(f"s3_vector_index_arn: {s3_vector_index_arn}")
+    config['s3_vector_index_name'] = s3_vector_index_name
+    
+    response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
+    indexes = response.get('indexes', [])
+    
+    if not any(index['indexName'] == s3_vector_index_name for index in indexes):
+        response = client.create_index(
+            vectorBucketArn=s3_vector_bucket_arn,
+            indexName=s3_vector_index_name,
+            dataType='float32',
+            dimension=1024,
+            distanceMetric='cosine'                
+        )
+        logger.info(f"response of create_index: {response}")
 
-    if not s3_vector_index_name or not s3_vector_index_arn:
-        s3_vector_index_name = f"s3-vector-index-for-{projectName}-{accountId}-{region}"
-        logger.info(f"s3_vector_index_name: {s3_vector_index_name}")
-        config['s3_vector_index_name'] = s3_vector_index_name
-        
-        response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
-        indexes = response.get('indexes', [])
-        
-        if not any(index['indexName'] == s3_vector_index_name for index in indexes):
-            response = client.create_index(
-                vectorBucketArn=s3_vector_bucket_arn,
-                indexName=s3_vector_index_name,
-                dataType='float32',
-                dimension=1024,
-                distanceMetric='cosine'                
-            )
-            logger.info(f"response of create_index: {response}")
+        logger.info(f"{s3_vector_index_name} is created.")
+    else:
+        logger.info(f"{s3_vector_index_name} is already exists.")
 
-            logger.info(f"{s3_vector_index_name} is created.")
-        else:
-            logger.info(f"{s3_vector_index_name} is already exists.")
-
-        response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
-        indexes = response.get('indexes', [])
-        for index in indexes:
-            if index['indexName'] == s3_vector_index_name:
-                s3_vector_index_arn = index['indexArn']
-                logger.info(f"s3_vector_index_arn: {s3_vector_index_arn}")
-                break
-        
-        config['s3_vector_index_arn'] = s3_vector_index_arn
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
+    response = client.list_indexes(vectorBucketName=s3_vector_bucket_name)
+    indexes = response.get('indexes', [])
+    for index in indexes:
+        if index['indexName'] == s3_vector_index_name:
+            s3_vector_index_arn = index['indexArn']
+            logger.info(f"s3_vector_index_arn: {s3_vector_index_arn}")
+            break
+    
+    config['s3_vector_index_arn'] = s3_vector_index_arn
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2)
 
     # Create knowledge base
     # parsingModelArn = f"arn:aws:bedrock:{region}::foundation-model/anthropic.claude-3-7-sonnet-20250219-v1:0"
