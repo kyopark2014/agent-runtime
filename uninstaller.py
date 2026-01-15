@@ -10,6 +10,7 @@ import logging
 import subprocess
 import sys
 import os
+import argparse
 from botocore.exceptions import ClientError
 
 # Configuration
@@ -1645,7 +1646,7 @@ def uninstall_agent_runtime(runtime_type: str = "langgraph") -> bool:
     try:
         logger.info(f"Running uninstaller: {uninstaller_path}")
         result = subprocess.run(
-            [sys.executable, uninstaller_path],
+            [sys.executable, uninstaller_path, "--yes"],
             cwd=os.path.dirname(uninstaller_path),
             check=False,
             capture_output=False
@@ -1685,7 +1686,7 @@ def uninstall_mcp_runtime(mcp_type: str) -> bool:
     try:
         logger.info(f"Running uninstaller: {uninstaller_path}")
         result = subprocess.run(
-            [sys.executable, uninstaller_path],
+            [sys.executable, uninstaller_path, "--yes"],
             cwd=os.path.dirname(uninstaller_path),
             check=False,
             capture_output=False
@@ -1705,6 +1706,15 @@ def uninstall_mcp_runtime(mcp_type: str) -> bool:
 
 def main():
     """Main function to delete all infrastructure."""
+    parser = argparse.ArgumentParser(description="AWS Infrastructure Uninstaller")
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt and proceed with deletion"
+    )
+    
+    args = parser.parse_args()
+    
     logger.info("="*60)
     logger.info("Starting AWS Infrastructure Cleanup")
     logger.info("="*60)
@@ -1712,6 +1722,17 @@ def main():
     logger.info(f"Region: {region}")
     logger.info(f"Account ID: {account_id}")
     logger.info("="*60)
+    
+    # Confirm deletion (skip if --yes flag is provided)
+    if not args.yes:
+        logger.info("")
+        logger.info("="*60)
+        logger.info("WARNING: This will delete all AWS infrastructure resources")
+        logger.info("="*60)
+        response = input("\nAre you sure you want to continue? (yes/no): ")
+        if response.lower() != 'yes':
+            logger.info("Uninstallation cancelled.")
+            sys.exit(0)
     
     start_time = time.time()
     

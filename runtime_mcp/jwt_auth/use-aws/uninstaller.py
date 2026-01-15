@@ -9,6 +9,7 @@ import sys
 import os
 import json
 import time
+import argparse
 import boto3
 from botocore.exceptions import ClientError, NoCredentialsError
 
@@ -1267,6 +1268,15 @@ def delete_knowledge_base_resources():
 
 def main():
     """Main function: Execute the entire uninstallation process."""
+    parser = argparse.ArgumentParser(description="AgentCore Runtime Uninstaller")
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation prompt and proceed with deletion"
+    )
+    
+    args = parser.parse_args()
+    
     print("\n" + "="*60)
     print("AgentCore Runtime Uninstallation Script")
     print("="*60)
@@ -1283,14 +1293,15 @@ def main():
     print(f"  - Account ID: {config.get('accountId')}")
     print(f"  - Knowledge Base removal: {config.get('is_removed', False)}")
     
-    # Confirm deletion
-    print("\n" + "="*60)
-    print("WARNING: This will delete all resources created by installer.py")
-    print("="*60)
-    response = input("\nAre you sure you want to continue? (yes/no): ")
-    if response.lower() != 'yes':
-        print("Uninstallation cancelled.")
-        sys.exit(0)
+    # Confirm deletion (skip if --yes flag is provided)
+    if not args.yes:
+        print("\n" + "="*60)
+        print("WARNING: This will delete all resources created by installer.py")
+        print("="*60)
+        response = input("\nAre you sure you want to continue? (yes/no): ")
+        if response.lower() != 'yes':
+            print("Uninstallation cancelled.")
+            sys.exit(0)
     
     # Execute each step in reverse order of creation (respecting dependencies)
     # This ensures that resources that depend on others are deleted first
