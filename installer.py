@@ -4076,6 +4076,18 @@ def main():
         else:
             knowledge_base_id = create_knowledge_base_with_opensearch(opensearch_info, knowledge_base_role_arn, s3_bucket_name)
             logger.info(f"Knowledge base created...")
+
+        # Install langgraph agent runtime using install_agent_runtime
+        install_agent_runtime("langgraph")
+        logger.info(f"Langgraph agent runtime installed...")
+
+        # Install kb-retriever mcp runtime using install_mcp_runtime
+        install_mcp_runtime("kb-retriever")
+        logger.info(f"Kb-retriever mcp runtime installed...")
+
+        # Install use-aws mcp runtime using install_mcp_runtime
+        install_mcp_runtime("use-aws")
+        logger.info(f"Use-aws mcp runtime installed...")
         
         # 5. Create VPC
         vpc_info = create_vpc()
@@ -4101,7 +4113,7 @@ def main():
         alb_listener_info = create_alb_target_group_and_listener(alb_info, instance_id, vpc_info)
         logger.info(f"ALB target group and listener created...")
         
-        # check whether the applireation is ready
+        # Check whether the application is ready
         logger.info(f"Checking if application is ready: {cloudfront_info['domain']}")
         check_application_ready(cloudfront_info["domain"])        
         
