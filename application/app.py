@@ -54,7 +54,7 @@ with st.sidebar:
             "kb-retriever", "use-aws", "aws document", "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["kb-retriever", "aws document"]
+        default_selections = ["kb-retriever", "use-aws"]
 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns
