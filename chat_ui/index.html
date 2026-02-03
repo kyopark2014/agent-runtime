@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Chat Interface</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🤖 LLM Chat Interface</h1>
+            <div class="config-section">
+                <select id="modelSelect">
+                    <option value="Claude 4.5 Haiku" selected>Claude 4.5 Haiku</option>
+                    <option value="Claude 4.5 Sonnet">Claude 4.5 Sonnet</option>
+                    <option value="Claude 4.5 Opus">Claude 4.5 Opus</option>
+                    <option value="Claude 4 Opus">Claude 4 Opus</option>
+                    <option value="Claude 4 Sonnet">Claude 4 Sonnet</option>
+                    <option value="Claude 3.7 Sonnet">Claude 3.7 Sonnet</option>
+                    <option value="Claude 3.5 Sonnet">Claude 3.5 Sonnet</option>
+                    <option value="Claude 3.0 Sonnet">Claude 3.0 Sonnet</option>
+                    <option value="Claude 3.5 Haiku">Claude 3.5 Haiku</option>
+                    <option value="OpenAI OSS 120B">OpenAI OSS 120B</option>
+                    <option value="OpenAI OSS 20B">OpenAI OSS 20B</option>
+                    <option value="Nova 2 Lite">Nova 2 Lite</option>
+                    <option value="Nova Premier">Nova Premier</option>
+                    <option value="Nova Pro">Nova Pro</option>
+                    <option value="Nova Lite">Nova Lite</option>
+                    <option value="Nova Micro">Nova Micro</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message assistant">
+                <div class="message-content">
+                    안녕하세요! LLM 채팅 테스트에 오신 것을 환영합니다. 무엇을 도와드릴까요?
+                </div>
+                <div class="message-time" id="welcomeTime"></div>
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <div class="input-group">
+                <textarea id="messageInput" placeholder="메시지를 입력하세요..." rows="1"></textarea>
+                <button id="sendButton" disabled>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="input-controls">
+                <button id="clearButton">대화 삭제</button>
+                <span class="char-count" id="charCount">0 / 2000</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+flask==2.3.3
+openai==0.28.1
+anthropic==0.3.11
+python-dotenv==1.0.0
+gunicorn==21.2.0

@@ -1,11 +1,17 @@
 import boto3
+from botocore.config import Config
 import json
 import os
 import logging
 import sys
 import requests
 import uuid
-import utils
+
+# Import utils from application package
+try:
+    from application import utils
+except ImportError:
+    import utils
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -685,7 +691,17 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
         return f"Error: agent_runtime_arn is not found", []
 
     try:
-        agent_core_client = boto3.client('bedrock-agentcore', region_name=bedrock_region)
+        # Configure boto3 client with longer timeout for streaming responses
+        boto_config = Config(
+            read_timeout=300,  # 5 minutes
+            connect_timeout=60,
+            retries={'max_attempts': 0}
+        )
+        agent_core_client = boto3.client(
+            'bedrock-agentcore', 
+            region_name=bedrock_region,
+            config=boto_config
+        )
         response = agent_core_client.invoke_agent_runtime(
             agentRuntimeArn=agent_runtime_arn,
             runtimeSessionId=runtime_session_id,
