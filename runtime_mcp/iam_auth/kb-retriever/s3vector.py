@@ -3,6 +3,7 @@ import sys
 import json
 import boto3
 import os
+import time
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -115,7 +116,7 @@ def create_knowledge_base(knowledge_base_name, region):
         ]
     }
 
-    # Trust policy for Bedrock service
+    # Trust policy for Bedrock service (see: https://docs.aws.amazon.com/bedrock/latest/userguide/kb-permissions.html)
     trust_policy = {
         "Version": "2012-10-17",
         "Statement": [
@@ -140,6 +141,9 @@ def create_knowledge_base(knowledge_base_name, region):
         iam.put_role_policy(RoleName=role_name, PolicyName=f"knowledge-base-for-{projectName}-{region}", PolicyDocument=json.dumps(knowledge_base_policy))
         
         logger.info(f"role_name: {role_name} is created.")
+        # IAM role propagation: Bedrock needs time to assume newly created roles (typically 10-30 seconds)
+        logger.info("Waiting 15 seconds for IAM role propagation before creating Knowledge Base...")
+        time.sleep(15)
     else:
         logger.info(f"role_name: {role_name} is already exists.")
 
@@ -157,7 +161,10 @@ def create_knowledge_base(knowledge_base_name, region):
         # Update policy for existing role to ensure all permissions
         iam.put_role_policy(RoleName=role_name, PolicyName=f"knowledge-base-for-{projectName}-{region}", PolicyDocument=json.dumps(knowledge_base_policy))
         logger.info(f"Updated policy for existing role: {role_name}")
-    
+        # Brief wait after trust policy update for IAM propagation
+        logger.info("Waiting 10 seconds for IAM trust policy propagation...")
+        time.sleep(10)
+
     # Create S3 Vector Bucket client
     client = boto3.client('s3vectors', region_name=region)
 
@@ -236,11 +243,11 @@ def create_knowledge_base(knowledge_base_name, region):
     knowledge_base_name = projectName
         
     bedrock_agent = boto3.client('bedrock-agent', region_name=region)
-    response = bedrock_agent.create_knowledge_base(
-        name=knowledge_base_name,
-        description=f"Knowledge base for {projectName} using s3 vector",
-        roleArn=role_arn,
-        knowledgeBaseConfiguration={
+    create_kb_params = {
+        "name": knowledge_base_name,
+        "description": f"Knowledge base for {projectName} using s3 vector",
+        "roleArn": role_arn,
+        "knowledgeBaseConfiguration": {
             "type": "VECTOR",
             "vectorKnowledgeBaseConfiguration": {
                 "embeddingModelArn": embeddingModelArn, 
@@ -262,14 +269,28 @@ def create_knowledge_base(knowledge_base_name, region):
                 }
             }
         },
-        storageConfiguration={
+        "storageConfiguration": {
             "type": "S3_VECTORS",
             "s3VectorsConfiguration": {
                 "vectorBucketArn": s3_vector_bucket_arn,
                 "indexArn": s3_vector_index_arn
             }
         }
-    )
+    }
+    # Retry on "unable to assume role" - IAM propagation can take 30s-5min
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = bedrock_agent.create_knowledge_base(**create_kb_params)
+            break
+        except Exception as e:
+            err_msg = str(e)
+            if "unable to assume" in err_msg.lower() and attempt < max_retries - 1:
+                wait_sec = 30 * (attempt + 1)
+                logger.warning(f"Role assume failed (attempt {attempt + 1}/{max_retries}). Waiting {wait_sec}s for IAM propagation...")
+                time.sleep(wait_sec)
+            else:
+                raise
     # Extract the actual knowledge base ID from the response
     knowledge_base_id = response['knowledgeBase']['knowledgeBaseId']
     config['knowledge_base_id'] = knowledge_base_id

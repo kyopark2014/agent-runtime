@@ -52,6 +52,9 @@ def load_config(mcp_type):
     if mcp_type == "kb-retriever":   # use agentcore runtime mcp
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
+        if agent_arn is None:
+            logger.warning(f"Agent runtime for '{mcp_type}' not found. Skipping MCP server. Ensure agent_runtime_{mcp_type.replace('-', '_')} is deployed.")
+            return None
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
         
         mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
@@ -72,6 +75,9 @@ def load_config(mcp_type):
     elif mcp_type == "use-aws":
         agent_arn = get_agent_runtime_arn(mcp_type)
         logger.info(f"mcp_type: {mcp_type}, agent_arn: {agent_arn}")
+        if agent_arn is None:
+            logger.warning(f"Agent runtime for '{mcp_type}' not found. Skipping MCP server. Ensure agent_runtime_{mcp_type.replace('-', '_')} is deployed.")
+            return None
         encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
         
         mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
