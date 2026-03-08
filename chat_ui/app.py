@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template, send_from_directory,
 import os
 import sys
 import openai
+import anthropic
 from datetime import datetime
 import json
 import logging
@@ -12,7 +13,7 @@ import threading
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-import agentcore_client
+from application import agentcore_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
