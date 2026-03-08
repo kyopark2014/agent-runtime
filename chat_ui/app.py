@@ -2,7 +2,6 @@ from flask import Flask, request, jsonify, render_template, send_from_directory,
 import os
 import sys
 import openai
-import anthropic
 from datetime import datetime
 import json
 import logging
@@ -13,7 +12,7 @@ import threading
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, project_root)
 
-from application import agentcore_client
+import agentcore_client
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,11 +21,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 
 # Configuration
-app.config['SECRET_KEY'] = 'your-secret-key-here'
-
-# Initialize API clients (you'll need to set up API keys)
-# openai.api_key = os.getenv('OPENAI_API_KEY')
-# anthropic_client = anthropic.Anthropic(api_key=os.getenv('ANTHROPIC_API_KEY'))
+# app.config['SECRET_KEY'] = 'your-secret-key-here'
 
 @app.route('/')
 def index():
@@ -50,7 +45,7 @@ def chat():
             return jsonify({'error': 'Message is required'}), 400
 
         message = data['message']
-        model = data.get('model', 'gpt-3.5-turbo')
+        model = data.get('model', 'Claude 4.5 Sonnet')
         temperature = data.get('temperature', 0.7)
         history = data.get('history', [])
         stream = data.get('stream', True)  # Enable streaming by default
