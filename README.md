@@ -771,6 +771,23 @@ pip install -r requirements.txt
 streamlit run application/app.py
 ```
 
+### Web Server 구현
+
+Flask 개발 서버를 이용해 web 동작을 확인할 수 있습니다.
+
+```text
+cd chat_ui && python app.py
+```
+
+이후 아래와 같이 웹으로 접속할 수 있습니다.
+
+<img width="699" height="201" alt="image" src="https://github.com/user-attachments/assets/2dd05a77-74e2-4d53-b66a-06c56c2ad479" />
+
+실행시 아래와 같이 동작을 테스트 할 수 있습니다.
+
+<img width="858" height="548" alt="image" src="https://github.com/user-attachments/assets/02165e11-e9e6-4691-a2cc-9c44b1f879d1" />
+
+
 
 ## 실행 결과
 
