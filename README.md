@@ -830,6 +830,6 @@ MCP server에서 "use_aws"를 선택하고, "내 cloudwatch 로그 리스트는?
 
 [Deploy Production-Ready Agents in 22 Minutes with AgentCore Runtime](https://www.youtube.com/watch?v=Q-tYIAuv9WI)
 
-
+[AgentCore Workshop](https://atomoh.gitbook.io/aiops)
 
 [Deploy Production-Ready Agents in 22 Minutes with AgentCore Runtime
