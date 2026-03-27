@@ -40,4 +40,6 @@ ENV PYTHONPATH=/app
 EXPOSE 8080
 ```
 CMD ["uv", "run", "opentelemetry-instrument", "uvicorn", "agent:app", "--host", "0.0.0.0", "--port", "8080"]
-`
+```
+
+## Installer
