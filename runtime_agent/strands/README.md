@@ -1,5 +1,64 @@
 # Strands Agent Runtime 
 
+## 배포를 위한 Agent.py의 준비
+
+Bedrock AgentCore를 설치하고 아래와 같이 BedrockAgentCoreApp를 app으로 설정합니다. 이때 entrypoint에는 agent 실행에 필요한 함수를 아래와 같이 정의할 수 있습니다.
+
+```python
+import logging
+import sys
+import strands_agent
+
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+
+app = BedrockAgentCoreApp()
+
+@app.entrypoint
+async def agentcore_strands(payload):
+    query = payload.get("prompt")
+    mcp_servers = payload.get("mcp_servers", [])
+    model_name = payload.get("model_name")
+    user_id = payload.get("user_id")
+
+    global tool_list
+    tool_list = []
+    
+    # initiate agent
+    await strands_agent.initiate_agent(
+        system_prompt=None, 
+        strands_tools=strands_agent.strands_tools, 
+        mcp_servers=mcp_servers
+    )
+
+    with strands_agent.mcp_manager.get_active_clients(mcp_servers) as _:
+        agent_stream = strands_agent.agent.stream_async(query)
+
+        final_output = ""
+        async for event in agent_stream:
+            text = ""            
+            if "data" in event:
+                text = event["data"]
+                logger.info(f"[data] {text}")
+                yield({'data': text})
+
+            elif "result" in event:
+                final = event["result"]                
+                message = final.message
+                if message:
+                    content = message.get("content", [])
+                    text = content[0].get("text", "")
+                    logger.info(f"[result] {text}")
+                
+                    final_output = {"messages": text, "image_url": []}
+
+    yield({'result': final_output})
+
+if __name__ == "__main__":
+    app.run()
+```
+
+
+
 ## Dockerfile
 
 [Dockerfile](./Dockerfile)와 같이 필요한 패키지를 설치하고 Runtime을 동작시킵니다.
