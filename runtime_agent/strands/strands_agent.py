@@ -17,7 +17,6 @@ from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
 from mcp.client.streamable_http import streamablehttp_client
 from botocore.config import Config
-from speak import speak
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -42,7 +41,6 @@ capture_prefix = "captures"
 selected_strands_tools = []
 selected_mcp_servers = []
 
-history_mode = "Disable"
 aws_region = utils.bedrock_region
 
 
@@ -65,12 +63,12 @@ def get_model():
     maxReasoningOutputTokens=64000
     thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens-1000)
 
-    # AWS 자격 증명 설정
+    # Configure AWS credentials from environment
     aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
     aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
     aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
 
-    # Bedrock 클라이언트 설정
+    # Bedrock client configuration (timeouts and retries)
     bedrock_config = Config(
         read_timeout=900,
         connect_timeout=900,
@@ -429,8 +427,7 @@ def update_tools(strands_tools: list, mcp_servers: list):
     tool_map = {
         "calculator": calculator,
         "current_time": current_time,
-        "use_aws": use_aws,
-        "speak": speak
+        "use_aws": use_aws
         # "python_repl": python_repl  # Temporarily disabled
     }
 
@@ -495,7 +492,7 @@ def update_tools(strands_tools: list, mcp_servers: list):
 
     return tools
 
-def create_agent(system_prompt, tools, history_mode):
+def create_agent(system_prompt, tools):
     if system_prompt==None:
         system_prompt = (
             "당신의 이름은 서연이고, 질문에 대해 친절하게 답변하는 사려깊은 인공지능 도우미입니다."
@@ -507,24 +504,14 @@ def create_agent(system_prompt, tools, history_mode):
         system_prompt = "You are a helpful AI assistant."
 
     model = get_model()
-    if history_mode == "Enable":
-        logger.info("history_mode: Enable")
-        agent = Agent(
-            model=model,
-            system_prompt=system_prompt,
-            tools=tools,
-            conversation_manager=conversation_manager,
-            #max_tokens=16000  # Add max_tokens limit to prevent MaxTokensReachedException
-        )
-    else:
-        logger.info("history_mode: Disable")
-        agent = Agent(
-            model=model,
-            system_prompt=system_prompt,
-            tools=tools,
-            #max_tokens=16000  # Add max_tokens limit to prevent MaxTokensReachedException
-            #max_parallel_tools=2
-        )
+        
+    agent = Agent(
+        model=model,
+        system_prompt=system_prompt,
+        tools=tools,
+        conversation_manager=conversation_manager,
+    )
+
     return agent
 
 def get_tool_list(tools):
@@ -538,9 +525,9 @@ def get_tool_list(tools):
             tool_list.append(module_name)
     return tool_list
 
-async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode):
+async def initiate_agent(system_prompt, strands_tools, mcp_servers):
     global agent, initiated
-    global selected_strands_tools, selected_mcp_servers, history_mode, tool_list
+    global selected_strands_tools, selected_mcp_servers, tool_list
 
     update_required = False
     if selected_strands_tools != strands_tools:
@@ -555,12 +542,6 @@ async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode)
         update_required = True
         logger.info(f"mcp_servers: {mcp_servers}")
 
-    if history_mode != historyMode:
-        logger.info("history_mode update!")
-        history_mode = historyMode
-        update_required = True
-        logger.info(f"history_mode: {history_mode}")
-
     logger.info(f"initiated: {initiated}, update_required: {update_required}")
 
     if not initiated or update_required:        
@@ -568,7 +549,7 @@ async def initiate_agent(system_prompt, strands_tools, mcp_servers, historyMode)
         tools = update_tools(strands_tools, mcp_servers)
         logger.info(f"tools: {tools}")
 
-        agent = create_agent(system_prompt, tools, history_mode)
+        agent = create_agent(system_prompt, tools)
         tool_list = get_tool_list(tools)
 
         if not initiated:
