@@ -9,7 +9,6 @@ RUN pip install --upgrade boto3 botocore \
 # Add the current directory to Python path
 ENV PYTHONPATH=/app
 
-EXPOSE 8080
 EXPOSE 8000
 
 COPY . .

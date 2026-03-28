@@ -1,6 +1,13 @@
 import logging
 import sys
 import strands_agent
+import httpx
+import boto3
+import utils
+from datetime import datetime, timezone
+from urllib.parse import urlparse
+from botocore.auth import SigV4Auth as BotocoreSigV4Auth
+from botocore.awsrequest import AWSRequest
 
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -12,6 +19,74 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("agent")
+
+# IAM-based Bedrock AgentCore Runtime MCP calls (e.g. kb-retriever, use-aws) require SigV4 signing.
+# For JWT-only runtimes, set auth_type to "jwt".
+_original_httpx_async_init = httpx.AsyncClient.__init__
+
+def _patched_httpx_async_init(self, *args, **kwargs):
+    async def sign_request(request: httpx.Request) -> None:
+        if "bedrock-agentcore" not in str(request.url):
+            return
+
+        boto_session = boto3.Session()
+        credentials = boto_session.get_credentials().get_frozen_credentials()
+
+        parsed_url = urlparse(str(request.url))
+        host = parsed_url.netloc
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+        body = None
+        if request.content:
+            if isinstance(request.content, bytes):
+                body = request.content
+            else:
+                try:
+                    body = await request.aread()
+                    if hasattr(request, "_content"):
+                        request._content = body
+                except Exception:
+                    pass
+
+        aws_headers = {
+            "host": host,
+            "x-amz-date": timestamp,
+            "Content-Type": request.headers.get("Content-Type", "application/json"),
+            "Accept": request.headers.get("Accept", "application/json, text/event-stream"),
+        }
+        if body:
+            aws_headers["Content-Length"] = str(len(body))
+
+        aws_request = AWSRequest(
+            method=request.method,
+            url=str(request.url),
+            headers=aws_headers,
+            data=body,
+        )
+
+        region = utils.load_config().get("region", "us-west-2")
+        auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
+        auth.add_auth(aws_request)
+
+        request.headers["X-Amz-Date"] = timestamp
+        request.headers["Authorization"] = aws_request.headers["Authorization"]
+        if credentials.token:
+            request.headers["X-Amz-Security-Token"] = credentials.token
+
+    if "event_hooks" not in kwargs:
+        kwargs["event_hooks"] = {"request": [], "response": []}
+    elif not isinstance(kwargs["event_hooks"], dict):
+        kwargs["event_hooks"] = {"request": [], "response": []}
+    if "request" not in kwargs["event_hooks"]:
+        kwargs["event_hooks"]["request"] = []
+    kwargs["event_hooks"]["request"].append(sign_request)
+
+    _original_httpx_async_init(self, *args, **kwargs)
+
+
+# "iam": use with iam_auth runtime_mcp deployments and mcp_config.py (URL only, no Bearer).
+# "jwt": when using mcp_config_jwt.py (Bearer) — skip the SigV4 patch.
+auth_type = "iam"
 
 # Agentcore Endpoints
 app = BedrockAgentCoreApp()
@@ -36,6 +111,10 @@ async def agentcore_strands(payload):
 
     global tool_list
     tool_list = []
+
+    if auth_type == "iam":
+        httpx.AsyncClient.__init__ = _patched_httpx_async_init
+        logger.info("Applied SigV4 monkey patch for Bedrock AgentCore MCP (streamable_http)")
 
     # initiate agent
     await strands_agent.initiate_agent(

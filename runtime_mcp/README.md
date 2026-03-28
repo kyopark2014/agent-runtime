@@ -101,3 +101,40 @@ response = client.create_agent_runtime(
 ```
 
 
+
+## Client에서 MCP Runtime 호출
+
+### IAM
+
+[test_mcp_remote.py](./iam_auth/kb-retriever/test_mcp_remote.py)를 참조합니다.
+
+```python
+agent_arn = config['agent_runtime_arn']                
+encoded_arn = agent_arn.replace(':', '%3A').replace('/', '%2F')
+
+mcp_url = f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT"
+
+request_body = json.dumps({
+    "jsonrpc": "2.0",
+    "id": "1",
+    "method": "initialize", 
+    "params": {
+        "protocolVersion": "2024-11-05", 
+        "capabilities": {}, 
+        "clientInfo": {
+            "name": "test-client", 
+            "version": "1.0.0"
+        }
+    }
+})
+
+# Generate SigV4 headers for the request
+headers = get_sigv4_headers("POST", mcp_url, request_body.encode('utf-8'), region)
+
+response = requests.post(
+    mcp_url,
+    headers=headers,
+    data=request_body,
+    timeout=30
+)
+```
