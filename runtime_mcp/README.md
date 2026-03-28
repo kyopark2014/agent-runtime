@@ -4,7 +4,7 @@
 
 [Dockerfile](./iam_auth/kb-retriever/Dockerfile)와 같이 필요한 패키지를 지정하고 8000 포트를 expose 합니다. 여기에서는 [mcp_server_retrieve.py](./iam_auth/kb-retriever/mcp_server_retrieve.py)를 entrypoint로 활용합니다.
 
-```python
+```bash
 FROM --platform=linux/arm64 python:3.13-slim
         
 WORKDIR /app
