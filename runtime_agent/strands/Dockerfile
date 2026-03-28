@@ -3,14 +3,11 @@ FROM --platform=linux/arm64 python:3.13-slim
 RUN apt-get update && apt-get install -y \
     curl \
     gnupg \
-    unzip \
     build-essential \
-    gcc \
     python3-dev \
-    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js
+# Install Node.js (stdio MCP servers may use npx/node)
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get update \
     && apt-get install -y nodejs \
@@ -19,10 +16,10 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 WORKDIR /app
 
 # Core dependencies
-RUN pip install boto3 botocore --upgrade
+RUN pip install boto3 --upgrade
 RUN pip install mcp
 RUN pip install strands-agents strands-agents-tools
-RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv
+RUN pip install bedrock-agentcore uv
 
 # OpenTelemetry
 RUN pip install aws-opentelemetry-distro>=0.10.0
