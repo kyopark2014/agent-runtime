@@ -5,10 +5,7 @@
 Bedrock AgentCore를 설치하고 아래와 같이 BedrockAgentCoreApp를 app으로 설정합니다. 이때 entrypoint에는 agent 실행에 필요한 함수를 아래와 같이 정의할 수 있습니다.
 
 ```python
-import logging
-import sys
 import strands_agent
-
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
 app = BedrockAgentCoreApp()
