@@ -157,7 +157,7 @@ IAM으로 된 MCP 서버의 mcp.json 포맷은 아래와 같습니다.
 }
 ```
 
-[agent.py in strands](https://github.com/kyopark2014/agent-runtime/blob/main/runtime_agent/strands/agent.py)와 같이 http에 인증을 하는 event_hook을 설정합니다.
+[agent.py in strands](https://github.com/kyopark2014/agent-runtime/blob/main/runtime_agent/strands/agent.py)와 같이 http에 인증을 하는 event_hook을 설정합니다. 이것은 일반 HTTP 클라이언트(httpx)로 보내는 요청에 AWS 서명(SigV4)을 붙입니다.
 
 ```python
 import httpx
@@ -179,10 +179,13 @@ if auth_type == "iam":
     httpx.AsyncClient.__init__ = _patched_httpx_async_init
 ```
 
-여기서 sign_request는 아래와 같이 구현할 수 있습니다.
+여기서 sign_request는 아래와 같이 구현할 수 있습니다. URL에 bedrock-agentcore가 있으면 AgentCore의 endpoint의 요청에 AWS 서명을 붙입니다. 
+
 
 ```python
 async def sign_request(request: httpx.Request) -> None:
+    if "bedrock-agentcore" not in str(request.url):
+        return
     boto_session = boto3.Session()
     credentials = boto_session.get_credentials().get_frozen_credentials()
 
