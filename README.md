@@ -205,7 +205,8 @@ response = client.create_agent_runtime(
 filesystemConfigurations에서 설정한 Session Storage는 runtime에서 아래처럼 Session Manager를 이용해 활용할 수 있습니다.
 
 ```python
-from strands import Agentfrom strands.session.file_session_manager import FileSessionManager
+from strands import Agent
+from strands.session.file_session_manager import FileSessionManager
 
 # Create a session manager with a unique session ID 
 session_manager = FileSessionManager(
