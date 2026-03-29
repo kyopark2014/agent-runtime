@@ -176,6 +176,35 @@ async def agent_langgraph(payload):
 ```
 
 
+#### Session Strogage
+
+AgentCore Runtime에서 context를 관리하기 위해 Session Strage를 활용할 수 있습니다.
+
+```python
+client = boto3.client('bedrock-agentcore-control', region_name=aws_region)
+
+response = client.create_agent_runtime(
+    agentRuntimeName=runtime_name,
+    agentRuntimeArtifact={
+        'containerConfiguration': {
+            'containerUri': f"{account_id}.dkr.ecr.{aws_region}.amazonaws.com/{repository_name}:{image_tag}"
+        }
+    },
+    filesystemConfigurations=[
+        {
+            "sessionStorage": {
+                "mountPath": "/mnt/workspace"  # /mnt/ 하위 경로 필수
+            }
+        }
+    ]
+    networkConfiguration={"networkMode": "PUBLIC"}, 
+    roleArn=agent_runtime_role
+)
+```
+
+filesystemConfigurations에서 설정한 Session Storage는 runtime이 
+
+
 
 ### AgentCore Runtime으로 Agent 배포하기
 
@@ -788,6 +817,44 @@ cd chat_ui && python app.py
 <img width="858" height="548" alt="image" src="https://github.com/user-attachments/assets/02165e11-e9e6-4691-a2cc-9c44b1f879d1" />
 
 
+### 비동기 실행
+
+에이전트가 즉시 응답하고 백그라운드에서 계속 처리할 수 있습니다. 클라이언트는 동기/비동기 구분 없이 동일한 API 사용가능하고, 세션을 재사용하여 컨텍스트 유지합니다.
+
+```python
+import threading
+import time
+from strands import Agent, tool
+from bedrock_agentcore.runtime import BedrockAgentCoreApp
+
+app = BedrockAgentCoreApp()
+
+@tool
+def start_background_task(duration: int = 5) -> str:
+    """백그라운드에서 지정된 시간 동안 실행되는 태스크 시작"""
+
+    # 비동기 태스크 등록
+    task_id = app.add_async_task("background_processing", {"duration": duration})
+
+    # 별도 스레드에서 백그라운드 작업 실행
+    def background_work():
+        time.sleep(duration)  # 실제 작업 수행
+        app.complete_async_task(task_id)  
+
+    threading.Thread(target=background_work, daemon=True).start()
+
+    return f"백그라운드 태스크 시작됨 (ID: {task_id}), {duration}초 후 완료 예정"
+
+agent = Agent(tools=[start_background_task])
+
+@app.entrypoint
+def main(payload):
+    user_message = payload.get("prompt", "3초짜리 태스크를 시작해줘")
+    return {"message": agent(user_message).message}
+
+if __name__ == "__main__":
+    app.run()
+```
 
 ## 실행 결과
 
