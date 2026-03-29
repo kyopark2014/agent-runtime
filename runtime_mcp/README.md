@@ -165,7 +165,7 @@ import httpx
 _original_httpx_async_init = httpx.AsyncClient.__init__
 
 def _patched_httpx_async_init(self, *args, **kwargs):
-if "event_hooks" not in kwargs:
+    if "event_hooks" not in kwargs:
         kwargs["event_hooks"] = {"request": [], "response": []}
     elif not isinstance(kwargs["event_hooks"], dict):
         kwargs["event_hooks"] = {"request": [], "response": []}
