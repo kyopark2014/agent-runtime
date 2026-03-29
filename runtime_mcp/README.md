@@ -147,7 +147,7 @@ IAM으로 된 MCP 서버의 mcp.json 포맷은 아래와 같습니다.
     "mcpServers": {
         "kb-retriever": {
             "type": "streamable_http",
-            "url": mcp_url,
+            "url": f"https://bedrock-agentcore.{region}.amazonaws.com/runtimes/{encoded_arn}/invocations?qualifier=DEFAULT",
             "headers": {
                 "Content-Type": "application/json",
                 "Accept": "application/json, text/event-stream"
