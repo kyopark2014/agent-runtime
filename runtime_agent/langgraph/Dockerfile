@@ -5,7 +5,7 @@ WORKDIR /app
 RUN pip install boto3 botocore --upgrade
 RUN pip install langchain_aws langchain langchain_community langchain_experimental langgraph
 RUN pip install mcp langchain-mcp-adapters
-RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv
+RUN pip install bedrock-agentcore uv
 
 # OpenTelemetry
 RUN pip install aws-opentelemetry-distro>=0.10.0
