@@ -3,57 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM Chat Interface</title>
+    <title>Runtime</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <h1>🤖 LLM Chat Interface</h1>
-            <div class="config-section">
-                <select id="modelSelect">
-                    <option value="Claude 4.5 Haiku" selected>Claude 4.5 Haiku</option>
-                    <option value="Claude 4.5 Sonnet">Claude 4.5 Sonnet</option>
-                    <option value="Claude 4.5 Opus">Claude 4.5 Opus</option>
-                    <option value="Claude 4 Opus">Claude 4 Opus</option>
-                    <option value="Claude 4 Sonnet">Claude 4 Sonnet</option>
-                    <option value="Claude 3.7 Sonnet">Claude 3.7 Sonnet</option>
-                    <option value="Claude 3.5 Sonnet">Claude 3.5 Sonnet</option>
-                    <option value="Claude 3.0 Sonnet">Claude 3.0 Sonnet</option>
-                    <option value="Claude 3.5 Haiku">Claude 3.5 Haiku</option>
-                    <option value="OpenAI OSS 120B">OpenAI OSS 120B</option>
-                    <option value="OpenAI OSS 20B">OpenAI OSS 20B</option>
-                    <option value="Nova 2 Lite">Nova 2 Lite</option>
-                    <option value="Nova Premier">Nova Premier</option>
-                    <option value="Nova Pro">Nova Pro</option>
-                    <option value="Nova Lite">Nova Lite</option>
-                    <option value="Nova Micro">Nova Micro</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="chat-messages" id="chatMessages">
-            <div class="message assistant">
-                <div class="message-content">
-                    안녕하세요! LLM 채팅 테스트에 오신 것을 환영합니다. 무엇을 도와드릴까요?
+    <div class="page-shell">
+        <div class="chat-container" role="application" aria-label="LLM 채팅">
+            <header class="chat-header">
+                <div class="chat-header-brand">
+                    <div class="brand-mark" aria-hidden="true">
+                        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="2" y="6" width="22" height="16" rx="4" stroke="currentColor" stroke-width="2"/>
+                            <path d="M8 24 L12 20 H26" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <circle cx="11" cy="14" r="1.5" fill="currentColor"/>
+                            <circle cx="16" cy="14" r="1.5" fill="currentColor"/>
+                            <circle cx="21" cy="14" r="1.5" fill="currentColor"/>
+                        </svg>
+                    </div>
+                    <div class="brand-text">
+                        <h1>Agent Runtime</h1>
+                        <p class="tagline">모델을 선택하고 메시지를 보내세요</p>
+                    </div>
                 </div>
-                <div class="message-time" id="welcomeTime"></div>
-            </div>
-        </div>
+                <div class="chat-header-actions">
+                    <label class="model-field">
+                        <span class="model-label">모델</span>
+                        <div class="select-wrap">
+                            <select id="modelSelect" aria-label="언어 모델 선택">
+                                <option value="Claude 4.5 Haiku" selected>Claude 4.5 Haiku</option>
+                                <option value="Claude 4.5 Sonnet">Claude 4.5 Sonnet</option>
+                                <option value="Claude 4.5 Opus">Claude 4.5 Opus</option>
+                                <option value="Claude 4 Opus">Claude 4 Opus</option>
+                                <option value="Claude 4 Sonnet">Claude 4 Sonnet</option>
+                                <option value="Claude 3.7 Sonnet">Claude 3.7 Sonnet</option>
+                                <option value="Claude 3.5 Sonnet">Claude 3.5 Sonnet</option>
+                                <option value="Claude 3.0 Sonnet">Claude 3.0 Sonnet</option>
+                                <option value="Claude 3.5 Haiku">Claude 3.5 Haiku</option>
+                                <option value="OpenAI OSS 120B">OpenAI OSS 120B</option>
+                                <option value="OpenAI OSS 20B">OpenAI OSS 20B</option>
+                                <option value="Nova 2 Lite">Nova 2 Lite</option>
+                                <option value="Nova Premier">Nova Premier</option>
+                                <option value="Nova Pro">Nova Pro</option>
+                                <option value="Nova Lite">Nova Lite</option>
+                                <option value="Nova Micro">Nova Micro</option>
+                            </select>
+                        </div>
+                    </label>
+                </div>
+            </header>
 
-        <div class="chat-input-container">
-            <div class="input-group">
-                <textarea id="messageInput" placeholder="메시지를 입력하세요..." rows="1"></textarea>
-                <button id="sendButton" disabled>
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="input-controls">
-                <button id="clearButton">대화 삭제</button>
-                <span class="char-count" id="charCount">0 / 2000</span>
-            </div>
+            <main class="chat-messages" id="chatMessages" aria-live="polite" aria-relevant="additions">
+                <div class="message assistant">
+                    <div class="message-content">
+                        안녕하세요! Agent에게 무엇이든 물어보세요.
+                    </div>
+                    <div class="message-time" id="welcomeTime"></div>
+                </div>
+            </main>
+
+            <footer class="chat-input-container">
+                <div class="input-group">
+                    <label class="sr-only" for="messageInput">메시지 입력</label>
+                    <textarea id="messageInput" placeholder="메시지를 입력하세요… (Enter 전송, Shift+Enter 줄바꿈)" rows="1"></textarea>
+                    <button type="button" id="sendButton" disabled aria-label="메시지 보내기">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-controls">
+                    <button type="button" id="clearButton" class="btn-ghost">대화 삭제</button>
+                    <span class="char-count" id="charCount">0 / 2000</span>
+                </div>
+            </footer>
         </div>
     </div>
 

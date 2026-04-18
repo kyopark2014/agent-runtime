@@ -4,6 +4,7 @@ import logging
 import sys
 import os
 import agentcore_client
+from notification_queue import NotificationQueue
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -190,14 +191,11 @@ if prompt := st.chat_input("메시지를 입력하세요."):
             with st.status("thinking...", expanded=True, state="running") as status:
                 logger.info(f"mcp_servers: {mcp_servers}")
 
-                containers = {                        
-                    "notification": [st.empty() for _ in range(1000)],
-                    "result": st.empty()
-                } 
+                notification_queue = NotificationQueue(container=status)
                 if platform == 'AgentCore':
-                    response, image_url = agentcore_client.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
+                    response, image_url = agentcore_client.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, notification_queue)
                 else:                    
-                    response, image_url = agentcore_client.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, containers)
+                    response, image_url = agentcore_client.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, notification_queue)
 
             st.session_state.messages.append({
                 "role": "assistant", 

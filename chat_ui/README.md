@@ -1,129 +1,99 @@
-# LLM Chat UI
+# Chat UI (`chat_ui/`)
 
-다양한 LLM 모델을 테스트할 수 있는 웹 기반 채팅 인터페이스입니다.
+저장소 루트의 **Agent Skills** 스택과 동일하게, Flask가 정적 UI와 API를 제공하고 백엔드는 **`application/langgraph_agent.run_langgraph_agent`** 로 Bedrock·MCP 에이전트를 실행합니다. (Streamlit `application/app.py` 과 같은 에이전트 진입점, MCP/스킬 기본값은 서버 코드에 고정.)
 
 ## 특징
 
-- 🤖 다중 LLM 모델 지원 (GPT, Claude 등)
-- 🎛️ Temperature 조절 기능
-- 💬 실시간 채팅 인터페이스
-- 📱 반응형 디자인
-- ⚡ 빠른 응답 및 스트리밍 지원
-- 🎨 모던하고 직관적인 UI/UX
+- 모델 선택(Claude / OpenAI OSS / Nova 등, `application/info.py` 기준)
+- **`POST /api/chat`** 기본 **SSE(`text/event-stream`)** 스트리밍 — 진행 중 마크다운 청크 갱신
+- 멀티턴: 요청 시 **최근 10개** 메시지를 `history`로 전달 → `history_mode` 자동 `Enable`/`Disable`
+- 개발용 **CORS** (`/api/*`, `/health`)
+- `file://` 로 HTML만 열 때는 `script.js` 기본 `http://127.0.0.1:5001` 또는 `<meta name="chat-api-base">` 로 API 베이스 지정
 
-## 지원 모델
+## 백엔드에서 쓰는 기본값 (`app.py`)
 
-- OpenAI GPT-3.5 Turbo
-- OpenAI GPT-4
-- Anthropic Claude 3 Haiku
-- Anthropic Claude 3 Sonnet
-- (추가 모델 확장 가능)
+| 항목 | 값 |
+|------|-----|
+| 기본 MCP 서버 | `tavily`, `knowledge base`, `web_fetch` |
+| Debug mode | `Enable` (도구/스트림 알림이 `FlaskNotificationQueue` → SSE `info`/`chunk` 등으로 전달되는 데 사용) |
+| Reasoning | `Disable` |
+| Skill mode | `Enable` |
+| 폴백 모델명 | `Claude 4.5 Sonnet` |
+| `default_skills` 미설정 시 | `skill-creator`, `graphify` 를 로드 설정에 보강 |
+
+실제 호출은 `chat.update(model, debug, reasoning, skill)` 후 `langgraph_agent.run_langgraph_agent(...)` 입니다.
 
 ## 설치 및 실행
 
-### 1. 의존성 설치
+프로젝트 **루트 README**의 AWS 자격·설정(`config.toml`, Secrets 등)을 먼저 맞춰야 에이전트가 동작합니다.
 
 ```bash
+cd chat_ui
 pip install -r requirements.txt
-```
-
-### 2. 환경변수 설정
-
-`.env` 파일을 생성하고 API 키를 설정하세요:
-
-```bash
-# OpenAI API Key (선택사항)
-OPENAI_API_KEY=your_openai_api_key_here
-
-# Anthropic API Key (선택사항)
-ANTHROPIC_API_KEY=your_anthropic_api_key_here
-
-# Flask 설정
-DEBUG=True
-SECRET_KEY=your_secret_key_here
-```
-
-### 3. 서버 실행
-
-```bash
 python app.py
 ```
 
-서버가 시작되면 브라우저에서 `http://localhost:5000`으로 접속하세요.
+- 기본 포트: **5001** (`PORT` 환경 변수로 변경 가능).
+- 브라우저: 터미널에 나온 주소(예: `http://127.0.0.1:5001/`)로 접속. **`index.html`을 파일로 직접 열지 말고** Flask 루트로 여는 것을 권장합니다.
+- 포트를 바꾼 경우 `index.html`의 `<meta name="chat-api-base" content="http://127.0.0.1:8080">` 등으로 클라이언트 베이스 URL을 맞춥니다.
 
 ## 프로젝트 구조
 
 ```
 chat_ui/
-├── app.py              # Flask 백엔드 서버
-├── index.html          # 메인 HTML 페이지
-├── script.js           # 프론트엔드 JavaScript
-├── style.css           # CSS 스타일
-├── requirements.txt    # Python 의존성
-└── README.md          # 이 파일
+├── app.py              # Flask, LangGraph 에이전트 연동, SSE
+├── index.html          # 모델 선택 + 채팅 UI
+├── script.js           # /api/chat SSE, /health 프리플라이트
+├── style.css
+├── requirements.txt    # Flask 등 (에이전트 본체는 상위 application 의존성)
+└── README.md
 ```
 
-## 사용법
+## API
 
-1. 웹 브라우저에서 애플리케이션에 접속
-2. 상단에서 원하는 LLM 모델 선택
-3. Temperature 슬라이더로 응답 창의성 조절
-4. 하단 입력창에 메시지 입력 후 전송
-5. AI 응답 확인 및 대화 계속
+### `POST /api/chat`
 
-## API 엔드포인트
+**Body (JSON)**
 
-### POST /api/chat
-채팅 메시지를 처리합니다.
+| 필드 | 설명 |
+|------|------|
+| `message` | 필수. 사용자 메시지 |
+| `model` | 선택. 미지정 시 기본 폴백 모델명 사용 |
+| `stream` | 선택. 기본 `true` → SSE. `false` 이면 JSON 한 번에 응답 |
+| `history` | 선택. `{ "role": "user"\|"assistant", "content": "..." }[]` |
 
-**Request Body:**
+**스트리밍(`stream: true`)** — `text/event-stream`, 줄 단위 `data: {json}`
+
+| `type` | 의미 |
+|--------|------|
+| `chunk` | 누적 답변 마크다운(같은 스트림에서 갱신) |
+| `info` | 도구/알림 문자열 |
+| `done` | 최종 본문 |
+| `error` | 오류 메시지 |
+
+**비스트리밍(`stream: false`)** — JSON:
+
 ```json
 {
-  "message": "사용자 메시지",
-  "model": "gpt-3.5-turbo",
-  "temperature": 0.7,
-  "history": []
+  "response": "…",
+  "model": "Claude 4.5 Sonnet",
+  "timestamp": "2026-04-18T12:00:00.000000"
 }
 ```
 
-**Response:**
-```json
-{
-  "response": "AI 응답",
-  "model": "gpt-3.5-turbo",
-  "timestamp": "2024-01-30T12:00:00"
-}
-```
+### `GET /api/models`
 
-### GET /api/models
-사용 가능한 모델 목록을 반환합니다.
+Claude / OpenAI OSS / Nova 그룹별 모델 문자열 목록(JSON).
 
-### GET /health
-서버 상태를 확인합니다.
+### `GET /health`
 
-## 개발자 정보
+`{"status": "healthy", "timestamp": "..."}` — 프론트 연결 가능 여부 확인용.
 
-현재는 Mock 응답을 사용하고 있습니다. 실제 LLM API를 연결하려면:
+## 제한·주의
 
-1. `app.py`에서 해당 함수들의 주석을 해제
-2. API 키를 환경변수로 설정
-3. 필요한 경우 추가 의존성 설치
+- UI에는 **Temperature 슬라이더 없음**; OpenAI/Anthropic 직접 REST가 아니라 **저장소의 Bedrock·에이전트 파이프라인**을 탑니다.
+- `chat_ui/requirements.txt`는 Flask 위주입니다. LangGraph/MCP/Bedrock 등은 **상위 `application` 및 루트 환경**이 필요합니다.
 
-## 커스터마이징
+## 라이선스·기여
 
-### 새로운 모델 추가
-
-1. `index.html`의 select 옵션에 모델 추가
-2. `app.py`의 `handle_chat_request` 함수에 모델 처리 로직 추가
-
-### 스타일 변경
-
-`style.css`를 수정하여 UI 디자인을 커스터마이징할 수 있습니다.
-
-## 라이선스
-
-MIT License
-
-## 기여
-
-이슈 리포트나 풀 리퀘스트를 환영합니다!
+저장소 루트의 라이선스 및 기여 안내를 따릅니다.

@@ -28,28 +28,17 @@ bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
 
-streaming_index = None
-index = 0
-def add_notification(containers, message):
-    global index
+def add_notification(notification_queue, message):
+    if notification_queue is not None:
+        notification_queue.notify(message)
 
-    if index == streaming_index:
-        index += 1
+def update_streaming_result(notification_queue, message):
+    if notification_queue is not None:
+        notification_queue.stream(message)
 
-    if containers is not None:
-        containers['notification'][index].info(message)
-    index += 1
-
-def update_streaming_result(containers, message):
-    global streaming_index
-    streaming_index = index 
-
-    if containers is not None:
-        containers['notification'][streaming_index].markdown(message)
-
-def update_tool_notification(containers, tool_index, message):
-    if containers is not None:
-        containers['notification'][tool_index].info(message)
+def tool_slot_update(notification_queue, slot_key: str, message: str):
+    if notification_queue is not None:
+        notification_queue.tool_update(slot_key, message)
 
 def load_agentcore_config(agent_name):
     client = boto3.client('bedrock-agentcore-control', region_name=bedrock_region)
@@ -419,9 +408,12 @@ def get_tool_info(tool_name, tool_content):
 
     return content, urls, tool_references
 
-def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_name, containers):
-    global index
-    index = 0
+def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_name, notification_queue=None):
+    tool_info_list.clear()
+    tool_result_list.clear()
+    tool_name_list.clear()
+    if notification_queue is not None:
+        notification_queue.reset()
 
     references = []
     image_url = []
@@ -485,14 +477,13 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                             
                             try:                                
                                 data_json = json.loads(data)
-                                # logger.info(f"index: {index}")
                                 
                                 if agent_type == 'strands':
                                     if 'data' in data_json:
                                         text = data_json['data']
                                         logger.info(f"[data] {text}")
                                         current += text
-                                        update_streaming_result(containers, current)
+                                        update_streaming_result(notification_queue, current)
                                     elif 'result' in data_json:
                                         final_output = data_json['result']
                                         logger.info(f"[result] {final_output}")
@@ -510,17 +501,14 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         toolUseId = data_json['toolUseId']
                                         logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                        if toolUseId not in tool_info_list: # new tool info
-                                            index += 1
+                                        tool_name_list[toolUseId] = tool
+                                        if toolUseId not in tool_info_list:
                                             current = ""
-                                            logger.info(f"new tool info: {toolUseId} -> {index}")
-                                            tool_info_list[toolUseId] = index
-                                            tool_name_list[toolUseId] = tool
-                                            add_notification(containers, f"Tool: {tool}, Input: {input}")
-
-                                        else: # overwrite tool info if already exists
-                                            logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
-                                            containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
+                                            logger.info(f"new tool info: {toolUseId}")
+                                            tool_info_list[toolUseId] = True
+                                        else:
+                                            logger.info(f"overwrite tool info: {toolUseId}")
+                                        tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
                                         
                                     elif 'toolResult' in data_json:                                    
                                         toolResult = data_json['toolResult']
@@ -528,14 +516,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         tool_name = tool_name_list[toolUseId]
                                         logger.info(f"[tool_result] {toolResult}")
 
-                                        if toolUseId not in tool_result_list:  # new tool result
-                                            index += 1
-                                            logger.info(f"new tool result: {toolUseId} -> {index}")
-                                            tool_result_list[toolUseId] = index
-                                            add_notification(containers, f"Tool Result: {str(toolResult)}")
-                                        else: # overwrite tool result
-                                            logger.info(f"overwrite tool result: {toolUseId} -> {tool_result_list[toolUseId]}")
-                                            containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {str(toolResult)}")
+                                        tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
                                         
                                         content, urls, refs = get_tool_info(tool_name, toolResult)
                                         if refs:
@@ -554,7 +535,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                     if 'data' in data_json:
                                         text = data_json['data']
                                         logger.info(f"[data] {text}")
-                                        update_streaming_result(containers, text)
+                                        update_streaming_result(notification_queue, text)
                                     elif 'result' in data_json:
                                         final_output = data_json['result']
                                         logger.info(f"[result] {final_output}")
@@ -574,8 +555,8 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         tool_name_list[toolUseId] = tool
                                         logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                        logger.info(f"tool info: {toolUseId} -> {index}")
-                                        add_notification(containers, f"Tool: {tool}, Input: {input}")
+                                        logger.info(f"tool info: {toolUseId}")
+                                        tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
                                         
                                     elif 'toolResult' in data_json:
                                         toolResult = data_json['toolResult']
@@ -583,9 +564,8 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         tool_name = tool_name_list[toolUseId]
                                         logger.info(f"[tool_result] {toolResult}")
 
-                                        tool_result_list[toolUseId] = index
-                                        logger.info(f"tool result: {toolUseId} -> {index}")                                    
-                                        add_notification(containers, f"Tool Result: {str(toolResult)}")
+                                        logger.info(f"tool result: {toolUseId}")
+                                        tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
 
                                         content, urls, refs = get_tool_info(tool_name, toolResult)
                                         if refs:
@@ -604,27 +584,27 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                     if 'TextBlock' in data_json:
                                         TextBlock = data_json['TextBlock']
                                         logger.info(f"TextBlock: {TextBlock}")
-                                        update_streaming_result(containers, TextBlock)
+                                        update_streaming_result(notification_queue, TextBlock)
 
                                         result = TextBlock
 
                                     elif 'tools' in data_json:
                                         tools = data_json['tools']
                                         logger.info(f"[tools] {tools}")
-                                        add_notification(containers, f"Tools: {tools}")
+                                        add_notification(notification_queue, f"Tools: {tools}")
 
                                     elif 'ToolUseBlock' in data_json:
                                         ToolUseBlock = data_json['ToolUseBlock']
                                         input = data_json['input']
                                         logger.info(f"tool: {ToolUseBlock}, input: {input}")
-                                        add_notification(containers, f"Tool: {ToolUseBlock}, Input: {input}")
+                                        add_notification(notification_queue, f"Tool: {ToolUseBlock}, Input: {input}")
                                         
                                     elif 'ToolResultBlock' in data_json:
                                         ToolResultBlock = data_json['ToolResultBlock']
                                         logger.info(f"ToolResult: {ToolResultBlock}")
 
                                         logger.info(f"tool result: {ToolResultBlock}")                                    
-                                        add_notification(containers, f"Tool Result: {str(ToolResultBlock)}")
+                                        add_notification(notification_queue, f"Tool Result: {str(ToolResultBlock)}")
 
                                         content, urls, refs = get_tool_info(tool_name, ToolResultBlock)
                                         if refs:
@@ -651,8 +631,8 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                 ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
             result += ref
 
-        if containers is not None:
-            containers['notification'][index].markdown(result)
+        if notification_queue is not None:
+            notification_queue.result(result)
     
         return result, image_url
         
@@ -661,9 +641,12 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
         logger.error(error_msg)
         return f"Error: {error_msg}", []
 
-def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, containers):
-    global index
-    index = 0
+def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, notification_queue=None):
+    tool_info_list.clear()
+    tool_result_list.clear()
+    tool_name_list.clear()
+    if notification_queue is not None:
+        notification_queue.reset()
 
     references = []
     image_url = []
@@ -737,7 +720,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     text = data_json['data']
                                     logger.info(f"[data] {text}")
                                     current += text
-                                    update_streaming_result(containers, current)
+                                    update_streaming_result(notification_queue, current)
 
                                 elif 'result' in data_json:
                                     final_output = data_json['result']
@@ -756,16 +739,11 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     toolUseId = data_json['toolUseId']
                                     # logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                    if toolUseId not in tool_info_list: # new tool info
-                                        index += 1
+                                    tool_name_list[toolUseId] = tool
+                                    if toolUseId not in tool_info_list:
                                         current = ""
-                                        # logger.info(f"new tool info: {toolUseId} -> {index}")
-                                        tool_info_list[toolUseId] = index      
-                                        tool_name_list[toolUseId] = tool                                  
-                                        add_notification(containers, f"Tool: {tool}, Input: {input}")
-                                    else: # overwrite tool info
-                                        # logger.info(f"overwrite tool info: {toolUseId} -> {tool_info_list[toolUseId]}")
-                                        containers['notification'][tool_info_list[toolUseId]].info(f"Tool: {tool}, Input: {input}")
+                                        tool_info_list[toolUseId] = True
+                                    tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
                                     
                                 elif 'toolResult' in data_json:
                                     toolResult = data_json['toolResult']
@@ -773,15 +751,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     tool_name = tool_name_list[toolUseId]
                                     logger.info(f"[tool_result] {toolResult}")
 
-                                    if toolUseId not in tool_result_list:  # new tool result    
-                                        index += 1
-                                        tool_result_list[toolUseId] = index
-                                        # add_notification(containers, f"Tool Result: {toolResult}")
-                                        logger.info(f"new tool result: {toolUseId} -> {index}")                                    
-                                        add_notification(containers, f"Tool Result: {str(toolResult)}")
-                                    else: # overwrite tool result
-                                        logger.info(f"overwrite tool result: {toolUseId} -> {tool_result_list[toolUseId]}")
-                                        containers['notification'][tool_result_list[toolUseId]].info(f"Tool Result: {str(toolResult)}")
+                                    tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
 
                                     content, urls, refs = get_tool_info(tool_name, toolResult)
                                     if refs:
@@ -800,7 +770,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                 if 'data' in data_json:
                                     text = data_json['data']
                                     logger.info(f"[data] {text}")
-                                    update_streaming_result(containers, text)
+                                    update_streaming_result(notification_queue, text)
                                 elif 'result' in data_json:
                                     final_output = data_json['result']
                                     logger.info(f"[result] {final_output}")
@@ -820,8 +790,8 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     tool_name_list[toolUseId] = tool
                                     logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                    logger.info(f"tool info: {toolUseId} -> {index}")
-                                    add_notification(containers, f"Tool: {tool}, Input: {input}")
+                                    logger.info(f"tool info: {toolUseId}")
+                                    tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
                                     
                                 elif 'toolResult' in data_json:
                                     toolResult = data_json['toolResult']
@@ -829,9 +799,8 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                     tool_name = tool_name_list[toolUseId]
                                     logger.info(f"[tool_result] {toolResult}")
 
-                                    tool_result_list[toolUseId] = index
-                                    logger.info(f"tool result: {toolUseId} -> {index}")                                    
-                                    add_notification(containers, f"Tool Result: {str(toolResult)}")
+                                    logger.info(f"tool result: {toolUseId}")
+                                    tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
 
                                     content, urls, refs = get_tool_info(tool_name, toolResult)
                                     if refs:
@@ -850,27 +819,27 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                                 if 'TextBlock' in data_json:
                                     TextBlock = data_json['TextBlock']
                                     logger.info(f"TextBlock: {TextBlock}")
-                                    update_streaming_result(containers, TextBlock)
+                                    update_streaming_result(notification_queue, TextBlock)
 
                                     result = TextBlock
 
                                 elif 'tools' in data_json:
                                     tools = data_json['tools']
                                     logger.info(f"[tools] {tools}")
-                                    add_notification(containers, f"Tools: {tools}")
+                                    add_notification(notification_queue, f"Tools: {tools}")
 
                                 elif 'ToolUseBlock' in data_json:
                                     ToolUseBlock = data_json['ToolUseBlock']
                                     input = data_json['input']
                                     logger.info(f"tool: {ToolUseBlock}, input: {input}")
-                                    add_notification(containers, f"Tool: {ToolUseBlock}, Input: {input}")
+                                    add_notification(notification_queue, f"Tool: {ToolUseBlock}, Input: {input}")
                                     
                                 elif 'ToolResultBlock' in data_json:
                                     ToolResultBlock = data_json['ToolResultBlock']
                                     logger.info(f"ToolResult: {ToolResultBlock}")
 
                                     logger.info(f"tool result: {ToolResultBlock}")                                    
-                                    add_notification(containers, f"Tool Result: {str(ToolResultBlock)}")
+                                    add_notification(notification_queue, f"Tool Result: {str(ToolResultBlock)}")
 
                                     content, urls, refs = get_tool_info(tool_name, ToolResultBlock)
                                     if refs:
@@ -897,8 +866,8 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, contain
                 ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
             result += ref
 
-        if containers is not None:
-            containers['notification'][index].markdown(result)
+        if notification_queue is not None:
+            notification_queue.result(result)
     
         logger.info(f"result: {result}")
         return result, image_url
