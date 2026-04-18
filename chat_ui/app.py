@@ -1,6 +1,5 @@
 """
-chat_ui Flask 서버: application/agentcore_client.run_agent 를 호출합니다.
-MCP·스킬은 application/app.py 기본값과 동일하게만 사용합니다.
+Flask app for chat_ui: invokes application/agentcore_client.run_agent.
 """
 from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
 import os
@@ -11,28 +10,11 @@ import queue
 import threading
 from datetime import datetime
 
-# ── Import path: application/chat.py 가 `import utils` 를 쓰므로 application 디렉터리 필요
+# Import path: application/chat.py uses `import utils`, so include the application directory.
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _application_dir = os.path.join(project_root, "application")
 sys.path.insert(0, project_root)
 sys.path.insert(0, _application_dir)
-
-import utils as utils_mod
-
-_orig_load_config = utils_mod.load_config
-
-# application/app.py: default_skills 미설정 시 UI 기본과 동일하게 사용
-_DEFAULT_SKILLS = ["skill-creator", "graphify"]
-
-
-def _load_config_with_default_skills():
-    cfg = _orig_load_config()
-    if not cfg.get("default_skills"):
-        cfg = {**cfg, "default_skills": list(_DEFAULT_SKILLS)}
-    return cfg
-
-
-utils_mod.load_config = _load_config_with_default_skills
 
 import info
 import chat
@@ -41,10 +23,10 @@ import agentcore_client
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# application/app.py sidebar 기본 MCP 선택과 동일
-DEFAULT_MCP_SERVERS = ["tavily", "knowledge base", "web_fetch"]
+# Default MCP servers (fixed for this UI).
+DEFAULT_MCP_SERVERS = ["kb-retriever", "use-aws", "aws document"]
 
-# Streamlit 앱 기본: Skill Mode·Debug Mode 체크 켜짐 → "Enable"
+# chat.debug_mode: when "Enable", stream SSE info/chunk events for agentcore_client output.
 _DEFAULT_DEBUG = "Enable"
 _FALLBACK_MODEL = "Claude 4.5 Sonnet"
 
@@ -53,7 +35,7 @@ app = Flask(__name__)
 
 @app.after_request
 def _cors_headers(response):
-    """file:// 또는 다른 포트에서 연 UI 가 /api 로 요청할 때 브라우저가 요구하는 CORS(개발용)."""
+    """Dev CORS for browsers calling /api from file:// or another origin."""
     if request.path.startswith("/api") or request.path == "/health":
         response.headers["Access-Control-Allow-Origin"] = "*"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -84,7 +66,7 @@ def _normalize_history(raw):
 
 
 class FlaskNotificationQueue:
-    """NotificationQueue API 호환: Streamlit 없이 SSE 큐로 마크다운/알림 전달."""
+    """NotificationQueue-compatible sink: push markdown/info to an SSE queue without Streamlit."""
 
     def __init__(self, q: "queue.Queue"):
         self._q = q
@@ -212,7 +194,7 @@ def _run_agent_sync(message, history_mode, model_name, notification_queue):
 
 
 def stream_agent(message, history_mode, model_name):
-    """SSE: markdown 청크 + 최종 done/error."""
+    """SSE stream: markdown chunks, then final done or error."""
     message_queue: queue.Queue = queue.Queue()
 
     def worker():
