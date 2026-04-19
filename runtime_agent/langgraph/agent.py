@@ -1,3 +1,4 @@
+import json
 import logging
 import sys
 import chat
@@ -11,7 +12,7 @@ from urllib.parse import urlparse
 from botocore.auth import SigV4Auth as BotocoreSigV4Auth
 from botocore.awsrequest import AWSRequest
 
-from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage, AIMessageChunk
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 
@@ -126,7 +127,13 @@ async def agent_langgraph(payload):
     user_id = payload.get("user_id")
     logger.info(f"user_id: {user_id}")
 
-    chat.update(modelName=model_name, userId=user_id)
+    chat.update(
+        modelName=model_name if model_name else chat.model_name,
+        debugMode=payload.get("debug_mode", chat.debug_mode),
+        multiRegion=payload.get("multi_region", chat.multi_region),
+        reasoningMode=payload.get("reasoning_mode", chat.reasoning_mode),
+        agentType=payload.get("agent_type", chat.agent_type),
+    )
 
     history_mode = payload.get("history_mode")
     logger.info(f"history_mode: {history_mode}")
@@ -157,7 +164,7 @@ async def agent_langgraph(payload):
 
     app = langgraph_agent.buildChatAgentWithHistory(tools)
     config = {
-        "recursion_limit": 50,
+        "recursion_limit": 100,
         "configurable": {"thread_id": user_id},
         "tools": tools,
         "system_prompt": None
@@ -166,47 +173,83 @@ async def agent_langgraph(payload):
     inputs = {
         "messages": [HumanMessage(content=query)]
     }
-            
-    value = final_output = None
-    async for output in app.astream(inputs, config):
-        for key, value in output.items():
-            logger.info(f"--> key: {key}, value: {value}")
 
-            if key == "messages" or key == "agent":
-                if isinstance(value, dict) and "messages" in value:
-                    final_output = value
-                elif isinstance(value, list):
-                    final_output = {"messages": value, "image_url": []}
-                else:
-                    final_output = {"messages": [value], "image_url": []}
+    final_output = None
+    tool_input_list = {}
+    yielded_tool_ids = set()
 
-            if "messages" in value:
-                for message in value["messages"]:
-                    if isinstance(message, AIMessage):
-                        logger.info(f"AIMessage: {message.content}")
+    # call_model이 chain.astream을 쓰므로 LLM 토큰/청크가 그래프로 전달됨 (langgraph_agent.call_model)
+    async for stream in app.astream(inputs, config, stream_mode="messages"):
+        chunk = stream[0] if isinstance(stream, (list, tuple)) and stream else stream
 
-                        yield({'data': message.content})
+        if isinstance(chunk, AIMessageChunk):
+            content = chunk.content
+            if isinstance(content, str) and content:
+                yield {"data": content}
+            elif isinstance(content, list):
+                for item in content:
+                    if not isinstance(item, dict):
+                        continue
+                    if item.get("type") == "text":
+                        text_part = item.get("text", "")
+                        if text_part:
+                            yield {"data": text_part}
+                    elif item.get("type") == "tool_use":
+                        tool_use_id = item.get("id", "")
+                        tool_name = item.get("name", "")
+                        if tool_use_id and tool_name:
+                            if tool_use_id not in tool_input_list:
+                                tool_input_list[tool_use_id] = ""
+                        if "partial_json" in item:
+                            pj = item.get("partial_json", "") or ""
+                            if tool_use_id:
+                                tool_input_list[tool_use_id] = tool_input_list.get(tool_use_id, "") + pj
+                            args_raw = tool_input_list.get(tool_use_id, "")
+                            if tool_use_id and args_raw:
+                                try:
+                                    args_obj = json.loads(args_raw)
+                                    if tool_use_id not in yielded_tool_ids:
+                                        yielded_tool_ids.add(tool_use_id)
+                                        logger.info(
+                                            f"tool_name: {tool_name}, content: {args_obj}, toolUseId: {tool_use_id}"
+                                        )
+                                        yield {
+                                            "tool": tool_name,
+                                            "input": args_obj,
+                                            "toolUseId": tool_use_id,
+                                        }
+                                except json.JSONDecodeError:
+                                    pass
+            # 완성된 tool_calls가 청크에 붙은 경우 (비스트리밍/일부 경로)
+            if getattr(chunk, "tool_calls", None):
+                for tc in chunk.tool_calls:
+                    if isinstance(tc, dict):
+                        tid, name, args = (
+                            tc.get("id", ""),
+                            tc.get("name", ""),
+                            tc.get("args", {}),
+                        )
+                    else:
+                        tid = getattr(tc, "id", "") or ""
+                        name = getattr(tc, "name", "") or ""
+                        args = getattr(tc, "args", {}) or {}
+                    if tid and tid not in yielded_tool_ids:
+                        yielded_tool_ids.add(tid)
+                        yield {"tool": name, "input": args, "toolUseId": tid}
 
-                        tool_calls = message.tool_calls
-                        # logger.info(f"tool_calls: {tool_calls}")
+        elif isinstance(chunk, ToolMessage):
+            logger.info(f"ToolMessage: {chunk.name}, {chunk.content}")
+            yield {"toolResult": chunk.content, "toolUseId": chunk.tool_call_id}
 
-                        if tool_calls:
-                            for tool_call in tool_calls:
-                                tool_name = tool_call["name"]
-                                tool_content = tool_call["args"]
-                                toolUseId = tool_call["id"]
-                                logger.info(f"tool_name: {tool_name}, content: {tool_content}, toolUseId: {toolUseId}")
-                                yield({'tool': tool_name, 'input': tool_content, 'toolUseId': toolUseId})
+    try:
+        snap = await app.aget_state(config)
+        if snap and getattr(snap, "values", None) is not None:
+            msgs = snap.values.get("messages")
+            final_output = {"messages": msgs, "image_url": []} if msgs is not None else None
+    except Exception as e:
+        logger.warning(f"aget_state: {e}")
 
-                    elif isinstance(message, ToolMessage):
-                        logger.info(f"ToolMessage: {message.name}, {message.content}")
-
-                        toolResult = message.content
-                        toolUseId = message.tool_call_id
-
-                        yield({'toolResult': toolResult, 'toolUseId': toolUseId})
-    
-    yield({'result': final_output})
+    yield {"result": final_output}
 
 if __name__ == "__main__":
     app.run()

@@ -78,6 +78,7 @@ DOCKER_CMD=(
     docker run -d
     --name "${DOCKER_NAME}-container"
     -p 8080:8080
+    -e "ALLOW_MISSING_RAG_CONFIG=1"
 )
 
 # Add AWS credentials volume mount if available

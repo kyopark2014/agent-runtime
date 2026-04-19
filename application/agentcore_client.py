@@ -58,6 +58,42 @@ tool_info_list = dict()
 tool_result_list = dict()
 tool_name_list = dict()
 
+
+def normalize_bedrock_message_content(content):
+    """
+    LangChain/Bedrock/Claude가 반환하는 message.content를 화면용 문자열로 만든다.
+    - str: 그대로
+    - list[dict]: Anthropic content blocks (type text, tool_use 등)에서 텍스트만 이어붙임
+    - dict: 단일 블록이면 text 키 사용
+    """
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, dict):
+        if content.get("type") == "text" and "text" in content:
+            return str(content["text"])
+        if "text" in content:
+            return str(content["text"])
+        return json.dumps(content, ensure_ascii=False)
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                if block.get("type") == "text" and "text" in block:
+                    parts.append(str(block["text"]))
+                elif "text" in block:
+                    parts.append(str(block["text"]))
+                elif block.get("type") == "tool_use":
+                    continue
+                else:
+                    parts.append(json.dumps(block, ensure_ascii=False))
+            else:
+                parts.append(str(block))
+        return "".join(parts)
+    return str(content)
+
+
 def get_tool_info(tool_name, tool_content):
     tool_references = []    
     urls = []
@@ -480,7 +516,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                 
                                 if agent_type == 'strands':
                                     if 'data' in data_json:
-                                        text = data_json['data']
+                                        text = normalize_bedrock_message_content(data_json['data'])
                                         logger.info(f"[data] {text}")
                                         current += text
                                         update_streaming_result(notification_queue, current)
@@ -533,15 +569,17 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
 
                                 elif(agent_type == 'langgraph'): # langgraph
                                     if 'data' in data_json:
-                                        text = data_json['data']
+                                        text = normalize_bedrock_message_content(data_json['data'])
                                         logger.info(f"[data] {text}")
-                                        update_streaming_result(notification_queue, text)
+                                        current += text
+                                        update_streaming_result(notification_queue, current)
                                     elif 'result' in data_json:
                                         final_output = data_json['result']
                                         logger.info(f"[result] {final_output}")
 
                                         messages = final_output.get('messages', [])
-                                        result = messages[-1].get('content')
+                                        raw_content = messages[-1].get('content') if messages else ""
+                                        result = normalize_bedrock_message_content(raw_content)
                                         logger.info(f"result: {result}")
                                         
                                         if "image_url" in final_output:
@@ -555,6 +593,9 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
                                         tool_name_list[toolUseId] = tool
                                         logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
+                                        if toolUseId not in tool_info_list:
+                                            current = ""
+                                            tool_info_list[toolUseId] = True
                                         logger.info(f"tool info: {toolUseId}")
                                         tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
                                         
@@ -717,7 +758,7 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, notific
 
                             if agent_type == 'strands':
                                 if 'data' in data_json:
-                                    text = data_json['data']
+                                    text = normalize_bedrock_message_content(data_json['data'])
                                     logger.info(f"[data] {text}")
                                     current += text
                                     update_streaming_result(notification_queue, current)
@@ -768,15 +809,17 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, notific
 
                             elif agent_type == 'langgraph': # langgraph
                                 if 'data' in data_json:
-                                    text = data_json['data']
+                                    text = normalize_bedrock_message_content(data_json['data'])
                                     logger.info(f"[data] {text}")
-                                    update_streaming_result(notification_queue, text)
+                                    current += text
+                                    update_streaming_result(notification_queue, current)
                                 elif 'result' in data_json:
                                     final_output = data_json['result']
                                     logger.info(f"[result] {final_output}")
 
                                     messages = final_output.get('messages', [])
-                                    result = messages[-1].get('content')
+                                    raw_content = messages[-1].get('content') if messages else ""
+                                    result = normalize_bedrock_message_content(raw_content)
                                     logger.info(f"result: {result}")
 
                                     if "image_url" in final_output:
@@ -790,6 +833,9 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, notific
                                     tool_name_list[toolUseId] = tool
                                     logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
+                                    if toolUseId not in tool_info_list:
+                                        current = ""
+                                        tool_info_list[toolUseId] = True
                                     logger.info(f"tool info: {toolUseId}")
                                     tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
                                     
