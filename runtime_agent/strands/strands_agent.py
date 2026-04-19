@@ -15,7 +15,8 @@ from strands_tools import current_time, file_read, file_write
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
-from mcp.client.streamable_http import streamable_http_client, streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 from botocore.config import Config
 from urllib import parse
 from strands import Agent, tool
@@ -462,10 +463,7 @@ def get_builtin_tools() -> list:
 # Strands Agent 
 #########################################################
 def get_model():
-    """LangGraph `chat.get_chat`와 동일: models[selected_chat] 프로필·리전·boto Config."""
-    if chat.selected_chat >= len(chat.models):
-        chat.selected_chat = 0
-    profile = chat.models[chat.selected_chat]
+    profile = chat.models[0]
     bedrock_region = profile["bedrock_region"]
     model_id = profile["model_id"]
     model_type = profile["model_type"]
@@ -489,7 +487,6 @@ def get_model():
     aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
     aws_session_token = os.environ.get("AWS_SESSION_TOKEN")
 
-    # LangGraph chat.get_chat과 동일한 bedrock-runtime 클라이언트 설정
     bedrock_config = Config(
         retries={"max_attempts": 30},
         read_timeout=300,
@@ -541,18 +538,30 @@ def get_model():
             streaming=True,
         )
 
-    if chat.multi_region == "Enable":
-        chat.selected_chat = chat.selected_chat + 1
-        if chat.selected_chat == chat.number_of_models:
-            chat.selected_chat = 0
-    else:
-        chat.selected_chat = 0
-
     return model
 
 conversation_manager = SlidingWindowConversationManager(
     window_size=10,  
 )
+
+
+@contextlib.asynccontextmanager
+async def _streamable_http_with_headers(
+    url: str,
+    headers: dict[str, str],
+    *,
+    terminate_on_close: bool = True,
+):
+    """Custom headers for Streamable HTTP MCP (replaces deprecated streamablehttp_client)."""
+    client = create_mcp_http_client(headers=headers)
+    async with client:
+        async with streamable_http_client(
+            url,
+            http_client=client,
+            terminate_on_close=terminate_on_close,
+        ) as streams:
+            yield streams
+
 
 class MCPClientManager:
     def __init__(self):
@@ -594,12 +603,11 @@ class MCPClientManager:
                         url = config["url"]
                         hdrs = config.get("headers") or {}
                         if hdrs:
-                            # Build httpx inside the MCP background thread's event loop (see mcp streamablehttp_client).
-                            # Pre-creating create_mcp_http_client() on the main thread binds AsyncClient to the
-                            # wrong loop and causes RuntimeError: Event loop is closed under AgentCore.
+                            # Build httpx inside the MCP background thread's event loop.
+                            # Pre-creating AsyncClient on the main thread binds it to the wrong loop.
                             self.clients[name] = MCPClient(
-                                lambda u=url, h=dict(hdrs): streamablehttp_client(
-                                    u, headers=h, terminate_on_close=True
+                                lambda u=url, h=dict(hdrs): _streamable_http_with_headers(
+                                    u, h, terminate_on_close=True
                                 )
                             )
                         else:
@@ -655,7 +663,7 @@ class MCPClientManager:
             del self.client_configs[name]
     
     def _all_mcp_sessions_active(self, client_names: List[str]) -> bool:
-        """Strands MCPClient 백그라운드 세션이 모두 살아 있는지 확인."""
+        """Return True if every named Strands MCPClient has an active background session."""
         for name in client_names:
             c = self.clients.get(name)
             if c is None or not c._is_session_active():
@@ -663,7 +671,7 @@ class MCPClientManager:
         return True
 
     def start_agent_clients(self, client_names: List[str]) -> bool:
-        """Start MCP clients persistently. Only restarts if client list changed or 세션이 죽었을 때."""
+        """Start MCP clients persistently. Restarts when the client set changes or any session is dead."""
         if (
             self._persistent_stack
             and set(self._persistent_client_names) == set(client_names)
@@ -675,7 +683,7 @@ class MCPClientManager:
 
         if self._persistent_stack and set(self._persistent_client_names) == set(client_names):
             logger.warning(
-                "MCP client 이름은 같지만 세션이 비활성입니다. persistent 스택을 재시작합니다."
+                "MCP client names unchanged but session(s) inactive; restarting persistent stack."
             )
 
         self.stop_agent_clients()
@@ -691,7 +699,7 @@ class MCPClientManager:
                 client = self.get_client(name)
                 if not client:
                     raise RuntimeError(
-                        f"MCP client가 구성되지 않았습니다: {name!r}. init_mcp_clients와 mcp_config를 확인하세요."
+                        f"MCP client not configured for {name!r}. Check init_mcp_clients and mcp_config."
                     )
                 self._persistent_stack.enter_context(client)
                 logger.info(f"client started: {name}")
@@ -717,7 +725,7 @@ class MCPClientManager:
     def get_active_clients(self, active_clients: List[str]):
         """Manage active clients context"""
         
-        # Reuse persistent clients if the same set is already running and 세션이 살아 있음
+        # Reuse persistent clients when the same set is running and all sessions are active.
         if (
             self._persistent_stack
             and set(self._persistent_client_names) == set(active_clients)
