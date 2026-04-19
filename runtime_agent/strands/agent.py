@@ -1,6 +1,7 @@
 import logging
 import sys
 import strands_agent
+import chat
 import httpx
 import boto3
 import utils
@@ -116,22 +117,51 @@ async def agentcore_strands(payload):
         httpx.AsyncClient.__init__ = _patched_httpx_async_init
         logger.info("Applied SigV4 monkey patch for Bedrock AgentCore MCP (streamable_http)")
 
-    # initiate agent
-    await strands_agent.initiate_agent(
-        system_prompt=None, 
-        strands_tools=strands_agent.strands_tools, 
-        mcp_servers=mcp_servers
+    # Model / user: mirror LangGraph agent.py payload fields on chat.update.
+    chat.update(
+        modelName=model_name if model_name else chat.model_name,
+        userId=user_id if user_id else chat.user_id,
+        debugMode=payload.get("debug_mode", chat.debug_mode),
+        multiRegion=payload.get("multi_region", chat.multi_region),
+        reasoningMode=payload.get("reasoning_mode", chat.reasoning_mode),
+        agentType=payload.get("agent_type", chat.agent_type),
     )
 
-    # run agent    
+    # Same lifecycle as strands_agent.run_strands_agent: MCP clients, tools, Agent instance.
+    # AgentCore runtime does not use plugins (always None for create_agent).
+    strands_tools = strands_agent.strands_tools
+
+    needs_agent = (
+        strands_agent.selected_strands_tools != strands_tools
+        or strands_agent.selected_mcp_servers != mcp_servers
+        or getattr(strands_agent, "agent", None) is None
+    )
+    if needs_agent:
+        strands_agent.selected_strands_tools = strands_tools
+        strands_agent.selected_mcp_servers = mcp_servers
+        strands_agent.active_plugin = None
+
+        strands_agent.mcp_manager.stop_agent_clients()
+        strands_agent.init_mcp_clients(mcp_servers)
+        tools = strands_agent.update_tools(strands_tools, mcp_servers)
+        strands_agent.agent = strands_agent.create_agent(tools, None)
+        strands_agent.mcp_manager.start_agent_clients(mcp_servers)
+
+    # Every request: ensure MCP sessions are alive (restart if needed; covers background session expiry when needs_agent is False).
+    strands_agent.mcp_manager.start_agent_clients(mcp_servers)
+
+    # run agent
     with strands_agent.mcp_manager.get_active_clients(mcp_servers) as _:
         agent_stream = strands_agent.agent.stream_async(query)
 
-        final_output = ""
+        # Always use a dict so the final SSE event is JSON with .get("messages") on the client.
+        final_output: dict = {"messages": "", "image_url": []}
+        streamed_text = ""
         async for event in agent_stream:
             text = ""            
             if "data" in event:
                 text = event["data"]
+                streamed_text += text
                 logger.info(f"[data] {text}")
                 yield({'data': text})
 
@@ -177,6 +207,9 @@ async def agentcore_strands(payload):
 
             else:
                 logger.info(f"event: {event}")
+
+        if not (final_output.get("messages") or "").strip() and streamed_text.strip():
+            final_output = {"messages": streamed_text, "image_url": []}
 
     yield({'result': final_output})
 

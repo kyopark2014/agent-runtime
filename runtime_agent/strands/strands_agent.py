@@ -6,17 +6,19 @@ import logging
 import sys
 import utils
 import boto3
+import subprocess
 
 from contextlib import contextmanager
 from typing import Dict, List, Optional
 from strands.models import BedrockModel
-from strands_tools import calculator, current_time, use_aws
+from strands_tools import current_time, file_read, file_write
 from strands.agent.conversation_manager import SlidingWindowConversationManager
-from strands import Agent
 from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client, streamablehttp_client
 from botocore.config import Config
+from urllib import parse
+from strands import Agent, tool
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -27,7 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger("strands-agent")
 
-initiated = False
 strands_tools = []
 mcp_servers = []
 
@@ -38,71 +39,480 @@ memory_id = actor_id = session_id = namespace = None
 s3_prefix = "docs"
 capture_prefix = "captures"
 
-selected_strands_tools = []
-selected_mcp_servers = []
+config = utils.load_config()
+s3_bucket = config.get("s3_bucket")
+sharing_url = config.get("sharing_url")
 
-aws_region = utils.bedrock_region
+WORKING_DIR = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(WORKING_DIR, "artifacts")
 
-def get_max_output_tokens(model_id: str = "") -> int:
-    """Return the max output tokens based on the model ID."""
-    if "claude-4" in model_id or "claude-sonnet-4" in model_id or "claude-opus-4" in model_id or "claude-haiku-4" in model_id:
-        return 16384
-    return 8192
+BASE_SYSTEM_PROMPT = (
+    "당신의 이름은 서연이고, 질문에 대해 친절하게 답변하는 사려깊은 인공지능 도우미입니다."
+    "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다."
+    "모르는 질문을 받으면 솔직히 모른다고 말합니다."
+    "결과 파일이 있으면 upload_file_to_s3로 업로드하여 URL을 제공합니다."
+)
+
+def build_system_prompt(plugin_name: Optional[str] = None, command: Optional[str] = None) -> str:
+    """Return the system prompt for the agent."""
+    return BASE_SYSTEM_PROMPT
+
+def s3_uri_to_console_url(uri: str, region: str) -> str:
+    """Open the object in the AWS S3 console (when sharing_url is not configured)."""
+    if not uri or not uri.startswith("s3://"):
+        return ""
+    rest = uri[5:]
+    parts = rest.split("/", 1)
+    bucket = parts[0]
+    key = parts[1] if len(parts) > 1 else ""
+    enc_key = parse.quote(key, safe="")
+    return f"https://{region}.console.aws.amazon.com/s3/object/{bucket}?prefix={enc_key}"
+
+import io, os, sys, json, traceback
+import subprocess as _subprocess, pathlib as _pathlib, shutil as _shutil
+import tempfile as _tempfile, glob as _glob, datetime as _datetime
+import math as _math, re as _re, requests as _requests
+from pathlib import Path
+
+WORKING_DIR = os.path.dirname(os.path.abspath(__file__))
+ARTIFACTS_DIR = os.path.join(WORKING_DIR, "artifacts")
+
+_ARTIFACT_EXT = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"})
+
+_mpl_runtime_ready = False
+
+def _artifact_files_mtime_snapshot() -> dict:
+    """Relative path from WORKING_DIR -> mtime. Only scans under artifacts/."""
+    snap = {}
+    if not os.path.isdir(ARTIFACTS_DIR):
+        return snap
+    for dirpath, _, filenames in os.walk(ARTIFACTS_DIR):
+        for fn in filenames:
+            full = os.path.join(dirpath, fn)
+            try:
+                rel = os.path.relpath(full, WORKING_DIR)
+                snap[rel] = os.path.getmtime(full)
+            except OSError:
+                pass
+    return snap
+
+
+def _touched_artifact_paths(before: dict, after: dict) -> list:
+    """Only files created or modified between pre/post execution snapshots."""
+    touched = []
+    for rel, mt in after.items():
+        if rel not in before or before[rel] != mt:
+            touched.append(rel)
+    return sorted(touched)
+
+
+def _paths_for_ui(relative_paths: list) -> list:
+    """absolute path for Streamlit st.image."""
+    out = []
+    for rel in relative_paths:
+            out.append(os.path.abspath(os.path.join(WORKING_DIR, rel)))
+    return out
+
+
+def _ensure_matplotlib_runtime():
+    """Use non-interactive Agg backend, prefer CJK-capable fonts, silence headless/show noise."""
+    global _mpl_runtime_ready
+    if _mpl_runtime_ready:
+        return
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+
+        import warnings
+
+        warnings.filterwarnings(
+            "ignore",
+            message=r"Glyph .* missing from font",
+            category=UserWarning,
+        )
+        warnings.filterwarnings(
+            "ignore",
+            message=r"FigureCanvasAgg is non-interactive.*",
+            category=UserWarning,
+        )
+
+        import matplotlib.font_manager as fm
+        import matplotlib as mpl
+
+        mpl.rcParams["axes.unicode_minus"] = False
+        cjk_candidates = (
+            "AppleGothic",
+            "Apple SD Gothic Neo",
+            "Malgun Gothic",
+            "NanumGothic",
+            "NanumBarunGothic",
+            "Noto Sans CJK KR",
+            "Noto Sans KR",
+        )
+        mpl.rcParams["font.family"] = "sans-serif"
+        mpl.rcParams["font.sans-serif"] = list(cjk_candidates) + ["DejaVu Sans", "sans-serif"]
+
+        _mpl_runtime_ready = True
+    except Exception as e:
+        logger.info(f"matplotlib runtime setup skipped: {e}")
+        _mpl_runtime_ready = True
+
+_exec_globals = {
+    "__builtins__": __builtins__,
+    "subprocess": _subprocess,
+    "json": json,
+    "os": os,
+    "sys": sys,
+    "io": io,
+    "pathlib": _pathlib,
+    "shutil": _shutil,
+    "tempfile": _tempfile,
+    "glob": _glob,
+    "datetime": _datetime,
+    "math": _math,
+    "re": _re,
+    "requests": _requests,
+    "WORKING_DIR": WORKING_DIR,
+    "ARTIFACTS_DIR": ARTIFACTS_DIR,
+}
+
+@tool
+def execute_code(code: str) -> str:
+    """Execute Python code and return stdout/stderr output.
+
+    Use this tool to run Python code for tasks such as processing data,
+    processing data, or performing computations. The execution environment
+    has access to common libraries: pandas, numpy, matplotlib, seaborn, etc.
+    json, csv, os, requests, etc.
+
+    Variables and imports from previous calls persist across invocations.
+    Generated files should be saved to the 'artifacts/' directory.
+
+    Path variables (pre-defined, do NOT redefine):
+    - WORKING_DIR: absolute path to application directory
+    - ARTIFACTS_DIR: absolute path to artifacts directory (WORKING_DIR/artifacts)
+
+    Args:
+        code: Python code to execute.
+
+    Returns:
+        Captured stdout output, or error traceback if execution failed.
+        If there is a result file, return the path of the file.            
+    """
+    logger.info(f"###### execute_code ######")
+    os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+    before_files = _artifact_files_mtime_snapshot()
+
+    old_cwd = os.getcwd()
+    stdout_capture = io.StringIO()
+    stderr_capture = io.StringIO()
+
+    try:
+        os.chdir(WORKING_DIR)
+        old_stdout, old_stderr = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = stdout_capture, stderr_capture
+
+        _ensure_matplotlib_runtime()
+        exec(code, _exec_globals)
+
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+        os.chdir(old_cwd)
+
+        output = stdout_capture.getvalue()
+        errors = stderr_capture.getvalue()
+
+        result = ""
+        if output:
+            result += output
+        if errors:
+            result += f"\n[stderr]\n{errors}"
+        if not result.strip():
+            result = "Code executed successfully (no output)."
+
+        after_files = _artifact_files_mtime_snapshot()
+        touched = _touched_artifact_paths(before_files, after_files)
+        artifact_rels = [
+            r
+            for r in touched
+            if os.path.splitext(r)[1].lower() in _ARTIFACT_EXT
+        ]
+        other_rels = [r for r in touched if r not in artifact_rels]
+        if other_rels:
+            lines = "\n".join(
+                os.path.abspath(os.path.join(WORKING_DIR, r)) for r in other_rels
+            )
+            result += f"\n[artifacts]\n{lines}"
+
+        if artifact_rels:
+            payload = {"output": result.strip()}
+            payload["path"] = _paths_for_ui(artifact_rels)
+            return json.dumps(payload, ensure_ascii=False)
+
+        return result
+
+    except Exception as e:
+        sys.stdout, sys.stderr = old_stdout, old_stderr
+        os.chdir(old_cwd)
+        tb = traceback.format_exc()
+        logger.error(f"Code execution error: {tb}")
+        return f"Error executing code:\n{tb}"
+
+
+@tool
+def upload_file_to_s3(filepath: str) -> str:
+    """Upload a local file to S3 and return the download URL.
+
+    Args:
+        filepath: Path relative to the working directory (e.g. 'artifacts/report.pdf').
+
+    Returns:
+        The download URL, or an error message.
+    """
+    logger.info(f"###### upload_file_to_s3: {filepath} ######")
+    try:
+        import boto3
+        from urllib import parse as url_parse
+
+        s3_bucket = config.get("s3_bucket")
+        if not s3_bucket:
+            return "S3 bucket is not configured."
+
+        full_path = os.path.join(WORKING_DIR, filepath)
+        if not os.path.exists(full_path):
+            return f"File not found: {filepath}"
+
+        content_type = utils.get_contents_type(filepath)
+        s3 = boto3.client("s3", region_name=config.get("region", "us-west-2"))
+
+        with open(full_path, "rb") as f:
+            s3.put_object(Bucket=s3_bucket, Key=filepath, Body=f.read(), ContentType=content_type)
+
+        if sharing_url:
+            url = f"{sharing_url}/{url_parse.quote(filepath)}"
+            return f"Upload complete: {url}"
+        return f"Upload complete: {s3_uri_to_console_url(f"s3://{s3_bucket}/{filepath}", config.get("region", "us-west-2"))}"
+
+    except Exception as e:
+        return f"Upload failed: {str(e)}"
+
+@tool
+def memory_search(query: str, max_results: int = 5, min_score: float = 0.0) -> str:
+    """Search across memory files (MEMORY.md and memory/*.md) for relevant information.
+
+    Performs keyword-based search over all memory files and returns matching snippets
+    ranked by relevance score.
+
+    Args:
+        query: Search query string.
+        max_results: Maximum number of results to return (default: 5).
+        min_score: Minimum relevance score threshold 0.0-1.0 (default: 0.0).
+
+    Returns:
+        JSON array of matching snippets with text, path, from (line), lines, and score.
+    """
+    import re as _re
+    logger.info(f"###### memory_search: {query} ######")
+
+    memory_root = Path(WORKING_DIR)
+    memory_dir = memory_root / "memory"
+
+    target_files = []
+    memory_md = memory_root / "MEMORY.md"
+    if memory_md.exists():
+        target_files.append(memory_md)
+    if memory_dir.exists():
+        target_files.extend(sorted(memory_dir.glob("*.md"), reverse=True))
+
+    if not target_files:
+        return json.dumps([], ensure_ascii=False)
+
+    query_lower = query.lower()
+    query_tokens = [t for t in _re.split(r'\s+', query_lower) if len(t) >= 2]
+
+    results = []
+    for fpath in target_files:
+        try:
+            content = fpath.read_text(encoding="utf-8")
+        except Exception:
+            continue
+
+        lines = content.split("\n")
+        content_lower = content.lower()
+
+        if not any(tok in content_lower for tok in query_tokens):
+            continue
+
+        window_size = 5
+        for i in range(0, len(lines), window_size):
+            chunk_lines = lines[i:i + window_size]
+            chunk_text = "\n".join(chunk_lines)
+            chunk_lower = chunk_text.lower()
+
+            matched_tokens = sum(1 for tok in query_tokens if tok in chunk_lower)
+            if matched_tokens == 0:
+                continue
+
+            score = matched_tokens / len(query_tokens) if query_tokens else 0.0
+
+            if score >= min_score:
+                rel_path = str(fpath.relative_to(memory_root))
+                results.append({
+                    "text": chunk_text.strip(),
+                    "path": rel_path,
+                    "from": i + 1,
+                    "lines": len(chunk_lines),
+                    "score": round(score, 3),
+                })
+
+    results.sort(key=lambda x: x["score"], reverse=True)
+    results = results[:max_results]
+
+    return json.dumps(results, indent=2, ensure_ascii=False)
+
+
+@tool
+def memory_get(path: str, from_line: int = 0, lines: int = 0) -> str:
+    """Read a specific memory file (MEMORY.md or memory/*.md).
+
+    Use after memory_search to get full context, or when you know the exact file path.
+
+    Args:
+        path: Workspace-relative path (e.g. "MEMORY.md", "memory/2026-03-02.md").
+        from_line: Starting line number, 1-indexed (0 = read from beginning).
+        lines: Number of lines to read (0 = read entire file).
+
+    Returns:
+        JSON with 'text' (file content) and 'path'. Returns empty text if file doesn't exist.
+    """
+    logger.info(f"###### memory_get: {path} ######")
+
+    full_path = Path(WORKING_DIR) / path
+
+    if not full_path.exists():
+        return json.dumps({"text": "", "path": path}, ensure_ascii=False)
+
+    try:
+        content = full_path.read_text(encoding="utf-8")
+
+        if from_line > 0 or lines > 0:
+            all_lines = content.split("\n")
+            start = max(0, from_line - 1)
+            if lines > 0:
+                end = start + lines
+                content = "\n".join(all_lines[start:end])
+            else:
+                content = "\n".join(all_lines[start:])
+
+        return json.dumps({"text": content, "path": path}, ensure_ascii=False)
+
+    except Exception as e:
+        return json.dumps({"text": f"Error reading file: {e}", "path": path}, ensure_ascii=False)
+
+
+def _ensure_cli_scripts_on_path() -> None:
+    """Prepend pip user script dir so CLIs (e.g. browser-use) resolve in subprocess."""
+    import site
+    import sysconfig
+
+    extra: list[str] = []
+    user_base = getattr(site, "USER_BASE", None)
+    if user_base:
+        user_bin = os.path.join(user_base, "bin")
+        if os.path.isdir(user_bin):
+            extra.append(user_bin)
+    try:
+        scripts = sysconfig.get_path("scripts")
+        if scripts and os.path.isdir(scripts):
+            extra.append(scripts)
+    except Exception:
+        pass
+    path = os.environ.get("PATH", "")
+    parts = [p for p in path.split(os.pathsep) if p]
+    for d in reversed(extra):
+        if d and d not in parts:
+            parts.insert(0, d)
+    os.environ["PATH"] = os.pathsep.join(parts)
+
+
+@tool
+def bash(command: str) -> str:
+    """Execute a bash command and return the result"""
+    logger.info(f"###### bash: {command} ######")
+    _ensure_cli_scripts_on_path()
+    result = subprocess.run(
+        command, shell=True, capture_output=True, text=True,
+        cwd=WORKING_DIR, timeout=300,
+        env=os.environ,
+    )
+    parts = []
+    if result.stdout:
+        parts.append(f"STDOUT:\n{result.stdout}")
+    if result.stderr:
+        parts.append(f"STDERR:\n{result.stderr}")
+    if result.returncode != 0:
+        parts.append(f"Return code: {result.returncode}")
+    return "\n".join(parts) if parts else "(no output)"
+
+def get_builtin_tools() -> list:
+    """Return the list of built-in tools for the agent."""
+    return [execute_code, bash, upload_file_to_s3]
 
 #########################################################
 # Strands Agent 
 #########################################################
 def get_model():
-    if chat.model_type == 'nova':
+    """LangGraph `chat.get_chat`와 동일: models[selected_chat] 프로필·리전·boto Config."""
+    if chat.selected_chat >= len(chat.models):
+        chat.selected_chat = 0
+    profile = chat.models[chat.selected_chat]
+    bedrock_region = profile["bedrock_region"]
+    model_id = profile["model_id"]
+    model_type = profile["model_type"]
+
+    if model_type == "nova":
         STOP_SEQUENCE = '"\n\n<thinking>", "\n<thinking>", " <thinking>"'
-    elif chat.model_type == 'claude':
-        STOP_SEQUENCE = "\n\nHuman:" 
-    elif chat.model_type == 'openai':
-        STOP_SEQUENCE = "" 
+    elif model_type == "claude":
+        STOP_SEQUENCE = "\n\nHuman:"
+    elif model_type == "openai":
+        STOP_SEQUENCE = ""
 
-    if chat.model_type == 'claude':
-        maxOutputTokens = get_max_output_tokens(chat.model_id)
+    if model_type == "claude":
+        maxOutputTokens = chat.get_max_output_tokens(model_id)
     else:
-        maxOutputTokens = 5120 # 5k
+        maxOutputTokens = 5120
 
-    maxReasoningOutputTokens=64000
-    thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens-1000)
+    maxReasoningOutputTokens = 64000
+    thinking_budget = min(maxOutputTokens, maxReasoningOutputTokens - 1000)
 
-    # Configure AWS credentials from environment
-    aws_access_key = os.environ.get('AWS_ACCESS_KEY_ID')
-    aws_secret_key = os.environ.get('AWS_SECRET_ACCESS_KEY')
-    aws_session_token = os.environ.get('AWS_SESSION_TOKEN')
+    aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+    aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+    aws_session_token = os.environ.get("AWS_SESSION_TOKEN")
 
-    # Bedrock client configuration (timeouts and retries)
+    # LangGraph chat.get_chat과 동일한 bedrock-runtime 클라이언트 설정
     bedrock_config = Config(
-        read_timeout=900,
-        connect_timeout=900,
-        retries=dict(max_attempts=3, mode="adaptive"),
+        retries={"max_attempts": 30},
+        read_timeout=300,
     )
 
     if aws_access_key and aws_secret_key:
-        bedrock_client = boto3.client(
-            'bedrock-runtime',
-            region_name=aws_region,
+        boto_session = boto3.Session(
+            region_name=bedrock_region,
             aws_access_key_id=aws_access_key,
             aws_secret_access_key=aws_secret_key,
             aws_session_token=aws_session_token,
-            config=bedrock_config
         )
     else:
-        bedrock_client = boto3.client(
-            'bedrock-runtime',
-            region_name=aws_region,
-            config=bedrock_config
-        )
+        boto_session = boto3.Session(region_name=bedrock_region)
 
-    if chat.reasoning_mode=='Enable' and chat.model_type != 'openai':
+    if chat.reasoning_mode == "Enable" and model_type != "openai":
         model = BedrockModel(
-            client=bedrock_client,
-            model_id=chat.model_id,
-            max_tokens=32000,  
-            stop_sequences = [STOP_SEQUENCE],
-            temperature = 1,
+            boto_session=boto_session,
+            boto_client_config=bedrock_config,
+            model_id=model_id,
+            max_tokens=64000,
+            stop_sequences=[STOP_SEQUENCE],
+            temperature=1,
             additional_request_fields={
                 "thinking": {
                     "type": "enabled",
@@ -110,26 +520,34 @@ def get_model():
                 }
             },
         )
-    elif chat.reasoning_mode=='Disable' and chat.model_type != 'openai':
+    elif chat.reasoning_mode == "Disable" and model_type != "openai":
         model = BedrockModel(
-            client=bedrock_client,
-            model_id=chat.model_id,
+            boto_session=boto_session,
+            boto_client_config=bedrock_config,
+            model_id=model_id,
             max_tokens=maxOutputTokens,
-            stop_sequences = [STOP_SEQUENCE],
-            temperature = 0.1,
-            top_p = 0.9,
+            stop_sequences=[STOP_SEQUENCE],
+            temperature=0.1,
             additional_request_fields={
                 "thinking": {
                     "type": "disabled"
                 }
-            }
+            },
         )
-    elif chat.model_type == 'openai':
+    elif model_type == "openai":
         model = BedrockModel(
-            model=chat.model_id,
-            region=aws_region,
-            streaming=True
+            model=model_id,
+            region=bedrock_region,
+            streaming=True,
         )
+
+    if chat.multi_region == "Enable":
+        chat.selected_chat = chat.selected_chat + 1
+        if chat.selected_chat == chat.number_of_models:
+            chat.selected_chat = 0
+    else:
+        chat.selected_chat = 0
+
     return model
 
 conversation_manager = SlidingWindowConversationManager(
@@ -140,53 +558,9 @@ class MCPClientManager:
     def __init__(self):
         self.clients: Dict[str, MCPClient] = {}
         self.client_configs: Dict[str, dict] = {}  # Store client configurations
-    
-    def _refresh_bearer_token_and_update_client(self, client_name: str) -> bool:
-        """Refresh bearer token and update client configuration"""
-        try:
-            # Load the original config to get Cognito settings
-            config = mcp_config.load_config(client_name)
-            if not config:
-                logger.error(f"Failed to load config for {client_name}")
-                return False
+        self._persistent_stack: Optional[contextlib.ExitStack] = None
+        self._persistent_client_names: List[str] = []
             
-            # Get fresh bearer token from Cognito
-            bearer_token = mcp_config.create_cognito_bearer_token(utils.load_config())
-            if not bearer_token:
-                logger.error("Failed to get fresh bearer token from Cognito")
-                return False
-            
-            logger.info("Successfully obtained fresh bearer token")
-            
-            # Update the client configuration with new bearer token
-            if client_name in self.client_configs:
-                client_config = self.client_configs[client_name]
-                if 'headers' in client_config:
-                    client_config['headers']['Authorization'] = f"Bearer {bearer_token}"
-                    logger.info(f"Updated bearer token for {client_name}")
-                    
-                    # Save the new bearer token
-                    secret_name = config.get('secret_name')
-                    if secret_name:
-                        mcp_config.save_bearer_token(secret_name, bearer_token)
-                    
-                    # Remove the old client to force recreation
-                    if client_name in self.clients:
-                        del self.clients[client_name]
-                    
-                    logger.info(f"Successfully refreshed bearer token for {client_name}")
-                    return True
-                else:
-                    logger.error(f"No headers found in client config for {client_name}")
-                    return False
-            else:
-                logger.error(f"No client config found for {client_name}")
-                return False
-                
-        except Exception as e:
-            logger.error(f"Error during bearer token refresh for {client_name}: {e}")
-            return False
-        
     def add_stdio_client(self, name: str, command: str, args: List[str], env: dict[str, str] = {}) -> None:
         """Add a new MCP client configuration (lazy initialization)"""
         self.client_configs[name] = {
@@ -195,7 +569,6 @@ class MCPClientManager:
             "args": args,
             "env": env
         }
-        logger.info(f"Stored configuration for MCP client: {name}")
     
     def add_streamable_client(self, name: str, url: str, headers: dict[str, str] = {}) -> None:
         """Add a new MCP client configuration (lazy initialization)"""
@@ -204,7 +577,6 @@ class MCPClientManager:
             "url": url,
             "headers": headers
         }
-        logger.info(f"Stored configuration for MCP client: {name}")
     
     def get_client(self, name: str) -> Optional[MCPClient]:
         """Get or create MCP client (lazy initialization)"""
@@ -215,32 +587,30 @@ class MCPClientManager:
         if name not in self.clients:
             # Create client on first use
             config = self.client_configs[name]
-            logger.info(f"Creating MCP client for {name} with config: {config}")
+            logger.info(f"Creating {name} MCP client with config: {config}")
             try:
                 if "transport" in config and config["transport"] == "streamable_http":
                     try:
-                        self.clients[name] = MCPClient(lambda: streamablehttp_client(
-                            url=config["url"], 
-                            headers=config["headers"]
-                        ))
+                        url = config["url"]
+                        hdrs = config.get("headers") or {}
+                        if hdrs:
+                            # Build httpx inside the MCP background thread's event loop (see mcp streamablehttp_client).
+                            # Pre-creating create_mcp_http_client() on the main thread binds AsyncClient to the
+                            # wrong loop and causes RuntimeError: Event loop is closed under AgentCore.
+                            self.clients[name] = MCPClient(
+                                lambda u=url, h=dict(hdrs): streamablehttp_client(
+                                    u, headers=h, terminate_on_close=True
+                                )
+                            )
+                        else:
+                            self.clients[name] = MCPClient(
+                                lambda u=url: streamable_http_client(u)
+                            )
                     except Exception as http_error:
                         logger.error(f"Failed to create streamable HTTP client for {name}: {http_error}")
                         if "403" in str(http_error) or "Forbidden" in str(http_error) or "MCPClientInitializationError" in str(http_error) or "client initialization failed" in str(http_error):
                             logger.error(f"Authentication failed for {name}. Attempting to refresh bearer token...")
                             
-                            # Try to refresh bearer token and retry
-                            if self._refresh_bearer_token_and_update_client(name):
-                                # Retry with new bearer token
-                                logger.info("Retrying MCP client creation with fresh bearer token...")
-                                config = self.client_configs[name]
-                                self.clients[name] = MCPClient(lambda: streamablehttp_client(
-                                    url=config["url"], 
-                                    headers=config["headers"]
-                                ))
-                                
-                                logger.info(f"Successfully created MCP client for {name} after bearer token refresh")
-                            else:
-                                raise http_error
                         else:
                             raise http_error
                 else:
@@ -284,10 +654,80 @@ class MCPClientManager:
         if name in self.client_configs:
             del self.client_configs[name]
     
+    def _all_mcp_sessions_active(self, client_names: List[str]) -> bool:
+        """Strands MCPClient 백그라운드 세션이 모두 살아 있는지 확인."""
+        for name in client_names:
+            c = self.clients.get(name)
+            if c is None or not c._is_session_active():
+                return False
+        return True
+
+    def start_agent_clients(self, client_names: List[str]) -> bool:
+        """Start MCP clients persistently. Only restarts if client list changed or 세션이 죽었을 때."""
+        if (
+            self._persistent_stack
+            and set(self._persistent_client_names) == set(client_names)
+            and client_names
+            and self._all_mcp_sessions_active(client_names)
+        ):
+            logger.info(f"Persistent MCP clients already running: {client_names}")
+            return False
+
+        if self._persistent_stack and set(self._persistent_client_names) == set(client_names):
+            logger.warning(
+                "MCP client 이름은 같지만 세션이 비활성입니다. persistent 스택을 재시작합니다."
+            )
+
+        self.stop_agent_clients()
+
+        if not client_names:
+            return False
+
+        logger.info(f"Starting persistent MCP clients: {client_names}")
+        self._persistent_stack = contextlib.ExitStack()
+
+        try:
+            for name in client_names:
+                client = self.get_client(name)
+                if not client:
+                    raise RuntimeError(
+                        f"MCP client가 구성되지 않았습니다: {name!r}. init_mcp_clients와 mcp_config를 확인하세요."
+                    )
+                self._persistent_stack.enter_context(client)
+                logger.info(f"client started: {name}")
+        except Exception:
+            self.stop_agent_clients()
+            raise
+
+        self._persistent_client_names = list(client_names)
+        return True
+    
+    def stop_agent_clients(self):
+        """Stop all persistent MCP clients."""
+        if self._persistent_stack:
+            logger.info(f"Stopping persistent MCP clients: {self._persistent_client_names}")
+            try:
+                self._persistent_stack.close()
+            except Exception as e:
+                logger.warning(f"Error stopping persistent clients: {e}")
+            self._persistent_stack = None
+            self._persistent_client_names = []
+    
     @contextmanager
     def get_active_clients(self, active_clients: List[str]):
         """Manage active clients context"""
-        logger.info(f"active_clients: {active_clients}")
+        
+        # Reuse persistent clients if the same set is already running and 세션이 살아 있음
+        if (
+            self._persistent_stack
+            and set(self._persistent_client_names) == set(active_clients)
+            and active_clients
+            and self._all_mcp_sessions_active(active_clients)
+        ):
+            logger.info("Reusing MCP clients")
+            yield
+            return
+        
         active_contexts = []
         try:
             for client_name in active_clients:
@@ -330,20 +770,7 @@ class MCPClientManager:
                                         if client_obj == client:
                                             client_name = name
                                             break
-                                    
-                                    if client_name:
-                                        if self._refresh_bearer_token_and_update_client(client_name):
-                                            # Retry with new bearer token
-                                            logger.info("Retrying client creation with fresh bearer token...")
-                                            # Remove the old client completely and create a new one
-                                            if client_name in self.clients:
-                                                del self.clients[client_name]
-                                            new_client = self.get_client(client_name)
-                                            if new_client:
-                                                stack.enter_context(new_client)
-                                                logger.info(f"Successfully created client for {client_name} after bearer token refresh")
-                                                continue
-                                    
+                                                                        
                                 except Exception as retry_error:
                                     logger.error(f"Error during bearer token refresh and retry: {retry_error}")
                             
@@ -373,8 +800,6 @@ mcp_manager = MCPClientManager()
 
 # Set up MCP clients
 def init_mcp_clients(mcp_servers: list):
-    logger.info(f"mcp_servers: {mcp_servers}")
-    
     for tool in mcp_servers:
         logger.info(f"Initializing MCP client for tool: {tool}")
         config = mcp_config.load_config(tool)
@@ -401,49 +826,56 @@ def init_mcp_clients(mcp_servers: list):
             except Exception as e:
                 logger.error(f"Failed to add streamable MCP client for {name}: {e}")
                 
-                # Try to refresh bearer token and retry for 403 errors
-                if "403" in str(e) or "Forbidden" in str(e) or "MCPClientInitializationError" in str(e) or "client initialization failed" in str(e):
-                    logger.info("Attempting to refresh bearer token and retry...")
-                    if mcp_manager._refresh_bearer_token_and_update_client(name):
-                        # Retry with new bearer token
-                        logger.info("Retrying MCP client creation with fresh bearer token...")
-                        mcp_manager.add_streamable_client(name, url, mcp_manager.client_configs[name]["headers"])
-                        logger.info(f"Successfully added streamable MCP client for {name} after bearer token refresh")
-                    else:
-                        continue
-                else:
-                    continue            
         else:
             name = tool  # Use tool name as client name
             command = server_config["command"]
             args = server_config["args"]
             env = server_config.get("env", {})  # Use empty dict if env is not present            
-            logger.info(f"Adding MCP client - name: {name}, command: {command}, args: {args}, env: {env}")        
+            logger.info(f"name: {name}, command: {command}, args: {args}, env: {env}")
+
+            # Skip if command is a file path and the executable doesn't exist
+            cmd_path = os.path.expanduser(command) if isinstance(command, str) else str(command)
+            if "/" in cmd_path or (isinstance(command, str) and command.startswith("~")):
+                if not os.path.isfile(cmd_path):
+                    logger.warning(f"Skipping {name}: executable not found at {cmd_path}")
+                    continue
 
             try:
                 mcp_manager.add_stdio_client(name, command, args, env)
-                logger.info(f"Successfully added MCP client for {name}")
+                logger.info(f"Successfully added {name} MCP client")
             except Exception as e:
                 logger.error(f"Failed to add stdio MCP client for {name}: {e}")
                 continue
                             
 def update_tools(strands_tools: list, mcp_servers: list):
-    tools = []
+    # builtin tools
+    tools = get_builtin_tools()
+        
     tool_map = {
-        "calculator": calculator,
         "current_time": current_time,
-        "use_aws": use_aws
-        # "python_repl": python_repl  # Temporarily disabled
+        "file_read": file_read,
+        "file_write": file_write
     }
 
     for tool_item in strands_tools:
+        if isinstance(tool_item, str):
+            if tool_item in tool_map:
+                tools.append(tool_map[tool_item])
+            else:
+                logger.warning(f"Unknown string tool: {tool_item}")
+            continue
+
         if isinstance(tool_item, list):
             tools.extend(tool_item)
-        elif isinstance(tool_item, str) and tool_item in tool_map:
-            tools.append(tool_map[tool_item])
+            continue
+
+        if hasattr(tool_item, 'tool_name') and tool_item.tool_name in [t.tool_name if hasattr(t, 'tool_name') else str(t) for t in tools]:
+            logger.info(f"builtin tool {tool_item.tool_name} already in tools")
+            continue
+
+        tools.append(tool_item)
 
     # MCP tools
-    mcp_servers_loaded = 0
     for mcp_tool in mcp_servers:
         logger.info(f"Processing MCP tool: {mcp_tool}")        
         try:
@@ -453,11 +885,15 @@ def update_tools(strands_tools: list, mcp_servers: list):
                     logger.info(f"Got client for {mcp_tool}, attempting to list tools...")
                     try:
                         mcp_servers_list = client.list_tools_sync()
-                        logger.info(f"{mcp_tool}_tools: {mcp_servers_list}")
-                        if mcp_servers_list:
-                            tools.extend(mcp_servers_list)
-                            mcp_servers_loaded += 1
-                            logger.info(f"Successfully added {len(mcp_servers_list)} tools from {mcp_tool}")
+                        # logger.info(f"{mcp_tool}_tools: {mcp_servers_list}")
+
+                        for mcp_server_item in mcp_servers_list:
+                            if mcp_server_item.tool_name in tools:
+                                logger.info(f"{mcp_server_item.tool_name} already in tools")
+                                continue
+
+                            tools.append(mcp_server_item)
+                            logger.info(f"Successfully added {mcp_server_item.tool_name} from {mcp_tool} server")
                         else:
                             logger.warning(f"No tools returned from {mcp_tool}")
                     except Exception as tool_error:
@@ -471,50 +907,19 @@ def update_tools(strands_tools: list, mcp_servers: list):
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             
-            # Try to refresh bearer token and retry for 403 errors
-            if "403" in str(e) or "Forbidden" in str(e) or "MCPClientInitializationError" in str(e) or "client initialization failed" in str(e):
-                logger.info(f"Attempting to refresh bearer token and retry for {mcp_tool}...")
-                if mcp_manager._refresh_bearer_token_and_update_client(mcp_tool):
-                    # Retry getting tools
-                    logger.info("Retrying tool retrieval with fresh bearer token...")
-                    with mcp_manager.get_active_clients([mcp_tool]) as _:
-                        client = mcp_manager.get_client(mcp_tool)
-                        if client:
-                            mcp_servers_list = client.list_tools_sync()
-                            if mcp_servers_list:
-                                tools.extend(mcp_servers_list)
-                                mcp_servers_loaded += 1
-                                logger.info(f"Successfully added {len(mcp_servers_list)} tools from {mcp_tool} after bearer token refresh")
-                            else:
-                                logger.warning(f"No tools returned from {mcp_tool} after bearer token refresh")
-                        else:
-                            logger.error(f"Failed to get client for {mcp_tool} after bearer token refresh")
-            
-            continue
-
-    logger.info(f"Successfully loaded {mcp_servers_loaded} out of {len(mcp_servers)} MCP tools")
-    logger.info(f"tools: {tools}")
-
     return tools
 
-def create_agent(system_prompt, tools):
-    if system_prompt==None:
-        system_prompt = (
-            "당신의 이름은 서연이고, 질문에 대해 친절하게 답변하는 사려깊은 인공지능 도우미입니다."
-            "상황에 맞는 구체적인 세부 정보를 충분히 제공합니다." 
-            "모르는 질문을 받으면 솔직히 모른다고 말합니다."
-        )
-
-    if not system_prompt or not system_prompt.strip():
-        system_prompt = "You are a helpful AI assistant."
+def create_agent(tools: list, plugin_name: Optional[str], command: Optional[str] = None):
+    system_prompt = build_system_prompt(plugin_name, command)
 
     model = get_model()
-        
+    
     agent = Agent(
         model=model,
         system_prompt=system_prompt,
         tools=tools,
         conversation_manager=conversation_manager,
+        #max_parallel_tools=2
     )
 
     return agent
@@ -530,37 +935,122 @@ def get_tool_list(tools):
             tool_list.append(module_name)
     return tool_list
 
-async def initiate_agent(system_prompt, strands_tools, mcp_servers):
-    global agent, initiated
-    global selected_strands_tools, selected_mcp_servers, tool_list
 
-    update_required = False
-    if selected_strands_tools != strands_tools:
-        logger.info("strands_tools update!")
+selected_strands_tools = []
+selected_mcp_servers = []
+active_plugin = None
+
+async def run_strands_agent(query: str, strands_tools: list[str], mcp_servers: list[str], plugin_name: Optional[str], notification_queue):
+    """Run the strands agent with streaming and tool notifications."""
+    queue = notification_queue
+    queue.reset()
+
+    image_url = []
+    references = []
+
+    global agent, selected_strands_tools, selected_mcp_servers, active_plugin
+
+    if selected_strands_tools != strands_tools or selected_mcp_servers != mcp_servers or active_plugin != plugin_name:        
         selected_strands_tools = strands_tools
-        update_required = True
-        logger.info(f"strands_tools: {strands_tools}")
-
-    if selected_mcp_servers != mcp_servers:
-        logger.info("mcp_servers update!")
         selected_mcp_servers = mcp_servers
-        update_required = True
-        logger.info(f"mcp_servers: {mcp_servers}")
-
-    logger.info(f"initiated: {initiated}, update_required: {update_required}")
-
-    if not initiated or update_required:        
+        active_plugin = plugin_name
+        
+        mcp_manager.stop_agent_clients()
+        
         init_mcp_clients(mcp_servers)
+
         tools = update_tools(strands_tools, mcp_servers)
-        logger.info(f"tools: {tools}")
 
-        agent = create_agent(system_prompt, tools)
+        agent = create_agent(tools, plugin_name)
         tool_list = get_tool_list(tools)
+    
+        # Start or reuse persistent MCP clients
+        mcp_manager.start_agent_clients(mcp_servers)
 
-        if not initiated:
-            logger.info("create agent!")
-            initiated = True
-        else:
-            logger.info("update agent!")
-            update_required = False
+    mcp_manager.start_agent_clients(mcp_servers)
+
+    # run agent
+    final_result = current = ""
+    with mcp_manager.get_active_clients(mcp_servers) as _:
+        agent_stream = agent.stream_async(query)
+
+        async for event in agent_stream:
+            text = ""
+            if "data" in event:
+                text = event["data"]
+                logger.info(f"[data] {text}")
+                current += text
+                queue.stream(current)
+
+            elif "result" in event:
+                final = event["result"]
+                message = final.message
+                if message:
+                    content = message.get("content", [])
+                    result = content[0].get("text", "")
+                    logger.info(f"[result] {result}")
+                    final_result = result
+
+            elif "current_tool_use" in event:
+                current_tool_use = event["current_tool_use"]
+                logger.info(f"current_tool_use: {current_tool_use}")
+                name = current_tool_use.get("name", "")
+                input_val = current_tool_use.get("input", "")
+                toolUseId = current_tool_use.get("toolUseId", "")
+
+                text = f"name: {name}, input: {input_val}"
+                logger.info(f"[current_tool_use] {text}")
+
+                queue.register_tool(toolUseId, name)
+                queue.tool_update(toolUseId, f"Tool: {name}, Input: {input_val}")
+                current = ""
+
+            elif "message" in event:
+                message = event["message"]
+                logger.info(f"[message] {message}")
+
+                if "content" in message:
+                    msg_content = message["content"]
+                    logger.info(f"tool content: {msg_content}")
+                    for item in msg_content:
+                        if "toolResult" not in item:
+                            continue
+                        toolResult = item["toolResult"]
+                        toolUseId = toolResult["toolUseId"]
+                        toolContent = toolResult["content"]
+                        toolResultText = toolContent[0].get("text", "")
+                        tool_name = queue.get_tool_name(toolUseId)
+                        logger.info(f"[toolResult] {toolResultText}, [toolUseId] {toolUseId}")
+                        queue.notify(f"Tool Result: {str(toolResultText)}")
+
+                        info_content, urls, refs = chat.get_tool_info(tool_name, toolResultText)
+                        if refs:
+                            for r in refs:
+                                references.append(r)
+                            logger.info(f"refs: {refs}")
+                        if urls:
+                            for url in urls:
+                                image_url.append(url)
+                            logger.info(f"urls: {urls}")
+
+                        if info_content:
+                            logger.info(f"content: {info_content}")
+
+            elif "contentBlockDelta" or "contentBlockStop" or "messageStop" or "metadata" in event:
+                pass
+
+            else:
+                logger.info(f"event: {event}")
+
+        if references:
+            ref = "\n\n### Reference\n"
+            for i, reference in enumerate(references):
+                content = reference['content'][:100].replace("\n", "")
+                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {content}...\n"
+            final_result += ref
+
+        if notification_queue is not None:
+            queue.result(final_result if final_result else current)
+
+    return final_result, image_url
 

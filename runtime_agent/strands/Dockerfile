@@ -15,8 +15,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  
 WORKDIR /app
 
-# Core dependencies
-RUN pip install boto3 --upgrade
+# Core dependencies (LangGraph Dockerfile과 동일하게 botocore 명시)
+RUN pip install boto3 botocore --upgrade
 RUN pip install mcp
 RUN pip install strands-agents strands-agents-tools
 RUN pip install bedrock-agentcore uv

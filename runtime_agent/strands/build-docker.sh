@@ -37,14 +37,11 @@ sudo docker build \
     -t ${DOCKER_NAME}:latest .
 
 if [ $? -eq 0 ]; then
-    echo "✅ Docker image built successfully with embedded credentials"
+    echo "✅ Docker image built successfully"
     echo ""
-    echo "🚀 To run the container:"
-    echo "   sudo docker run -d --name ${DOCKER_NAME} -p 8080:8080 ${DOCKER_NAME}:latest"
-    echo ""
-    echo "⚠️  Note: AWS credentials are embedded in the Docker image"
-    echo "   - Do not share this image publicly"
-    echo "   - For production, use environment variables or IAM roles"
+    echo "🚀 로컬 실행: ./run-docker.sh (호스트 ~/.aws 마운트 + AWS 환경 변수)"
+    echo "   기본 Dockerfile에는 자격 증명이 포함되지 않습니다."
+    echo "   이미지 안에 넣으려면 Dockerfile.local 및 해당 빌드 스크립트를 사용하세요."
 else
     echo "❌ Docker build failed"
     exit 1
