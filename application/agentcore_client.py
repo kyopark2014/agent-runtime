@@ -487,194 +487,229 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
         logger.info(f"Response headers: {response.headers}")
 
         result = current = ""
-        
-        # Direct stream processing (instead of SSE client library)
+        sse_line_count = 0
+
+        # Assemble lines from raw chunks. urllib3/requests iter_lines() often fails to yield
+        # lines incrementally for chunked text/event-stream, so the UI stays blank until EOF.
         buffer = ""
-        processed_data = set()  # Prevent duplicate data
-        
-        for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
-            if chunk:
-                buffer += chunk
-                
-                # Find SSE event boundaries
-                while '\n\n' in buffer:
-                    event_data, buffer = buffer.split('\n\n', 1)
-                
-                 # Find data: lines                
-                for line in event_data.split('\n'):
-                    if line.startswith('data: '):
-                        data = line[6:].strip()  # Remove "data: " prefix
-                        if data:  # Only process non-empty data
-                            # Check for duplicate data
-                            if data in processed_data:
-                                # logger.info(f"Skipping duplicate data: {data[:50]}...")
-                                continue
-                            processed_data.add(data)
-                            
-                            try:                                
-                                data_json = json.loads(data)
-                                
-                                if agent_type == 'strands':
-                                    if 'data' in data_json:
-                                        text = normalize_bedrock_message_content(data_json['data'])
-                                        logger.info(f"[data] {text}")
-                                        current += text
-                                        update_streaming_result(notification_queue, current)
-                                    elif 'result' in data_json:
-                                        final_output = data_json['result']
-                                        logger.info(f"[result] {final_output}")
+        for chunk in response.iter_content(chunk_size=4096):
+            if not chunk:
+                continue
+            if isinstance(chunk, bytes):
+                chunk = chunk.decode("utf-8", errors="replace")
+            buffer += chunk.replace("\r\n", "\n").replace("\r", "\n")
+            while "\n" in buffer:
+                line, buffer = buffer.split("\n", 1)
+                line = line.strip()
+                if not line or line.startswith(":"):
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                # "data: " or "data:" + payload
+                data = line[5:].lstrip()
+                if not data:
+                    continue
+                sse_line_count += 1
 
-                                        result = final_output.get('messages', [])
-                                        logger.info(f"result: {result}")
+                try:
+                    data_json = json.loads(data)
+                except json.JSONDecodeError:
+                    logger.info(f"Not JSON: {data[:200]}")
+                    continue
+                except Exception as parse_err:
+                    logger.error(f"SSE JSON parse error: {parse_err}")
+                    continue
 
-                                        if "image_url" in final_output:
-                                            image_url = final_output.get('image_url', [])
-                                            logger.info(f"image_url: {image_url}")                                        
-                                        
-                                    elif 'tool' in data_json:
-                                        tool = data_json['tool']
-                                        input = data_json['input']
-                                        toolUseId = data_json['toolUseId']
-                                        logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
+                if isinstance(data_json, dict) and "error" in data_json and "error_type" in data_json:
+                    err = data_json.get("error", "")
+                    em = data_json.get("message", "streaming failed")
+                    logger.error(f"SSE runtime error event: {data_json}")
+                    result = f"Error: {em}: {err}"
+                    add_notification(notification_queue, str(result))
+                    continue
 
-                                        tool_name_list[toolUseId] = tool
-                                        if toolUseId not in tool_info_list:
-                                            current = ""
-                                            logger.info(f"new tool info: {toolUseId}")
-                                            tool_info_list[toolUseId] = True
-                                        else:
-                                            logger.info(f"overwrite tool info: {toolUseId}")
-                                        tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
-                                        
-                                    elif 'toolResult' in data_json:                                    
-                                        toolResult = data_json['toolResult']
-                                        toolUseId = data_json['toolUseId']
-                                        tool_name = tool_name_list[toolUseId]
-                                        logger.info(f"[tool_result] {toolResult}")
+                if agent_type == 'strands':
+                    if 'data' in data_json:
+                        text = normalize_bedrock_message_content(data_json['data'])
+                        logger.info(f"[data] {text}")
+                        current += text
+                        update_streaming_result(notification_queue, current)
+                    elif 'result' in data_json:
+                        final_output = data_json['result']
+                        logger.info(f"[result] {final_output}")
 
-                                        tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
-                                        
-                                        content, urls, refs = get_tool_info(tool_name, toolResult)
-                                        if refs:
-                                            for r in refs:
-                                                references.append(r)
-                                            logger.info(f"refs: {refs}")
-                                        if urls:
-                                            for url in urls:
-                                                image_url.append(url)
-                                            logger.info(f"urls: {urls}")
+                        if isinstance(final_output, dict):
+                            result = final_output.get('messages', [])
+                            if "image_url" in final_output:
+                                image_url = final_output.get('image_url', [])
+                                logger.info(f"image_url: {image_url}")
+                        elif isinstance(final_output, str):
+                            result = final_output
+                        else:
+                            result = final_output
+                        logger.info(f"result: {result}")
 
-                                        if content:
-                                            logger.info(f"content: {content}")    
+                    elif 'tool' in data_json:
+                        tool = data_json['tool']
+                        input = data_json['input']
+                        toolUseId = data_json['toolUseId']
+                        logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                elif(agent_type == 'langgraph'): # langgraph
-                                    if 'data' in data_json:
-                                        text = normalize_bedrock_message_content(data_json['data'])
-                                        logger.info(f"[data] {text}")
-                                        current += text
-                                        update_streaming_result(notification_queue, current)
-                                    elif 'result' in data_json:
-                                        final_output = data_json['result']
-                                        logger.info(f"[result] {final_output}")
+                        tool_name_list[toolUseId] = tool
+                        if toolUseId not in tool_info_list:
+                            current = ""
+                            logger.info(f"new tool info: {toolUseId}")
+                            tool_info_list[toolUseId] = True
+                        else:
+                            logger.info(f"overwrite tool info: {toolUseId}")
+                        tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
 
-                                        messages = final_output.get('messages', [])
-                                        raw_content = messages[-1].get('content') if messages else ""
-                                        result = normalize_bedrock_message_content(raw_content)
-                                        logger.info(f"result: {result}")
-                                        
-                                        if "image_url" in final_output:
-                                            image_url = final_output.get('image_url', [])
-                                            logger.info(f"image_url: {image_url}")                
+                    elif 'toolResult' in data_json:
+                        toolResult = data_json['toolResult']
+                        toolUseId = data_json['toolUseId']
+                        tool_name = tool_name_list[toolUseId]
+                        logger.info(f"[tool_result] {toolResult}")
 
-                                    elif 'tool' in data_json:
-                                        tool = data_json['tool']
-                                        input = data_json['input']
-                                        toolUseId = data_json['toolUseId']
-                                        tool_name_list[toolUseId] = tool
-                                        logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
+                        tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
 
-                                        if toolUseId not in tool_info_list:
-                                            current = ""
-                                            tool_info_list[toolUseId] = True
-                                        logger.info(f"tool info: {toolUseId}")
-                                        tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
-                                        
-                                    elif 'toolResult' in data_json:
-                                        toolResult = data_json['toolResult']
-                                        toolUseId = data_json['toolUseId']
-                                        tool_name = tool_name_list[toolUseId]
-                                        logger.info(f"[tool_result] {toolResult}")
+                        content, urls, refs = get_tool_info(tool_name, toolResult)
+                        if refs:
+                            for r in refs:
+                                references.append(r)
+                            logger.info(f"refs: {refs}")
+                        if urls:
+                            for url in urls:
+                                image_url.append(url)
+                            logger.info(f"urls: {urls}")
 
-                                        logger.info(f"tool result: {toolUseId}")
-                                        tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
+                        if content:
+                            logger.info(f"content: {content}")
 
-                                        content, urls, refs = get_tool_info(tool_name, toolResult)
-                                        if refs:
-                                            for r in refs:
-                                                references.append(r)
-                                            logger.info(f"refs: {refs}")
-                                        if urls:
-                                            for url in urls:
-                                                image_url.append(url)
-                                            logger.info(f"urls: {urls}")
+                elif agent_type == 'langgraph':
+                    if 'data' in data_json:
+                        text = normalize_bedrock_message_content(data_json['data'])
+                        logger.info(f"[data] {text}")
+                        current += text
+                        update_streaming_result(notification_queue, current)
+                    elif 'result' in data_json:
+                        final_output = data_json['result']
+                        logger.info(f"[result] {final_output}")
 
-                                        if content:
-                                            logger.info(f"content: {content}")     
+                        if isinstance(final_output, dict):
+                            messages = final_output.get('messages', [])
+                            raw_content = messages[-1].get('content') if messages else ""
+                            result = normalize_bedrock_message_content(raw_content)
+                            logger.info(f"result: {result}")
 
-                                else: # claude
-                                    if 'TextBlock' in data_json:
-                                        TextBlock = data_json['TextBlock']
-                                        logger.info(f"TextBlock: {TextBlock}")
-                                        update_streaming_result(notification_queue, TextBlock)
+                            if "image_url" in final_output:
+                                image_url = final_output.get('image_url', [])
+                                logger.info(f"image_url: {image_url}")
+                        elif isinstance(final_output, str):
+                            result = final_output
+                        else:
+                            result = str(final_output)
 
-                                        result = TextBlock
+                    elif 'tool' in data_json:
+                        tool = data_json['tool']
+                        input = data_json['input']
+                        toolUseId = data_json['toolUseId']
+                        tool_name_list[toolUseId] = tool
+                        logger.info(f"[tool] {tool}, [input] {input}, [toolUseId] {toolUseId}")
 
-                                    elif 'tools' in data_json:
-                                        tools = data_json['tools']
-                                        logger.info(f"[tools] {tools}")
-                                        add_notification(notification_queue, f"Tools: {tools}")
+                        if toolUseId not in tool_info_list:
+                            current = ""
+                            tool_info_list[toolUseId] = True
+                        logger.info(f"tool info: {toolUseId}")
+                        tool_slot_update(notification_queue, f"{toolUseId}:input", f"Tool: {tool}, Input: {input}")
 
-                                    elif 'ToolUseBlock' in data_json:
-                                        ToolUseBlock = data_json['ToolUseBlock']
-                                        input = data_json['input']
-                                        logger.info(f"tool: {ToolUseBlock}, input: {input}")
-                                        add_notification(notification_queue, f"Tool: {ToolUseBlock}, Input: {input}")
-                                        
-                                    elif 'ToolResultBlock' in data_json:
-                                        ToolResultBlock = data_json['ToolResultBlock']
-                                        logger.info(f"ToolResult: {ToolResultBlock}")
+                    elif 'toolResult' in data_json:
+                        toolResult = data_json['toolResult']
+                        toolUseId = data_json['toolUseId']
+                        tool_name = tool_name_list[toolUseId]
+                        logger.info(f"[tool_result] {toolResult}")
 
-                                        logger.info(f"tool result: {ToolResultBlock}")                                    
-                                        add_notification(notification_queue, f"Tool Result: {str(ToolResultBlock)}")
+                        logger.info(f"tool result: {toolUseId}")
+                        tool_slot_update(notification_queue, f"{toolUseId}:result", f"Tool Result: {str(toolResult)}")
 
-                                        content, urls, refs = get_tool_info(tool_name, ToolResultBlock)
-                                        if refs:
-                                            for r in refs:
-                                                references.append(r)
-                                            logger.info(f"refs: {refs}")
-                                        if urls:
-                                            for url in urls:
-                                                image_url.append(url)
-                                            logger.info(f"urls: {urls}")
+                        content, urls, refs = get_tool_info(tool_name, toolResult)
+                        if refs:
+                            for r in refs:
+                                references.append(r)
+                            logger.info(f"refs: {refs}")
+                        if urls:
+                            for url in urls:
+                                image_url.append(url)
+                            logger.info(f"urls: {urls}")
 
-                                        if content:
-                                            logger.info(f"content: {content}")    
+                        if content:
+                            logger.info(f"content: {content}")
 
-                            except json.JSONDecodeError:
-                                logger.info(f"Not JSON: {data}")
-                            except Exception as e:
-                                logger.error(f"Error processing data: {e}")
-                                break
+                else:
+                    tool_name = ""
+                    if 'TextBlock' in data_json:
+                        TextBlock = data_json['TextBlock']
+                        logger.info(f"TextBlock: {TextBlock}")
+                        update_streaming_result(notification_queue, TextBlock)
+
+                        result = TextBlock
+
+                    elif 'tools' in data_json:
+                        tools = data_json['tools']
+                        logger.info(f"[tools] {tools}")
+                        add_notification(notification_queue, f"Tools: {tools}")
+
+                    elif 'ToolUseBlock' in data_json:
+                        ToolUseBlock = data_json['ToolUseBlock']
+                        input = data_json['input']
+                        logger.info(f"tool: {ToolUseBlock}, input: {input}")
+                        add_notification(notification_queue, f"Tool: {ToolUseBlock}, Input: {input}")
+
+                    elif 'ToolResultBlock' in data_json:
+                        ToolResultBlock = data_json['ToolResultBlock']
+                        logger.info(f"ToolResult: {ToolResultBlock}")
+
+                        logger.info(f"tool result: {ToolResultBlock}")
+                        add_notification(notification_queue, f"Tool Result: {str(ToolResultBlock)}")
+
+                        content, urls, refs = get_tool_info(tool_name, ToolResultBlock)
+                        if refs:
+                            for r in refs:
+                                references.append(r)
+                            logger.info(f"refs: {refs}")
+                        if urls:
+                            for url in urls:
+                                image_url.append(url)
+                            logger.info(f"urls: {urls}")
+
+                        if content:
+                            logger.info(f"content: {content}")
+
+        if buffer.strip():
+            logger.warning(f"SSE stream ended with incomplete line in buffer: {buffer[:120]!r}")
+        logger.info(f"SSE data lines consumed: {sse_line_count}")
+
+        # If the runtime never sent a usable final payload, keep the streamed markdown.
+        if agent_type in ('strands', 'langgraph'):
+            _empty = (
+                result == "" or result == [] or result is None
+                or (isinstance(result, str) and not result.strip())
+            )
+            if _empty and current:
+                result = current
 
         if references:
             ref = "\n\n### Reference\n"
             for i, reference in enumerate(references):
-                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
-            result += ref
+                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"
+            if isinstance(result, str):
+                result += ref
 
         if notification_queue is not None:
-            notification_queue.result(result)
-    
+            _final = result
+            if not isinstance(_final, str):
+                _final = json.dumps(_final, ensure_ascii=False) if isinstance(_final, (list, dict)) else str(_final)
+            notification_queue.result(_final)
+
         return result, image_url
         
     except Exception as e:
