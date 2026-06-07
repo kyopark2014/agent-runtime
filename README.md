@@ -13,6 +13,123 @@
 
 AgentCore의 runtime은 배포를 위해 Docker를 이용합니다. 현재(2025.7) 기준으로 arm64와 1GB 이하의 docker image를 지원합니다.
 
+### Operation Architecture
+
+Streamlit UI(`application/app.py`)에서 Agent 타입·MCP·모델·플랫폼을 선택하면 `agentcore_client.py`가 AgentCore Runtime(`invoke_agent_runtime`) 또는 로컬 Docker(`localhost:8080`)로 요청을 보냅니다. Runtime은 `runtime_agent/{langgraph,strands,claude}/agent.py`의 `BedrockAgentCoreApp` 엔트리포인트에서 MCP와 내장 도구를 연결한 뒤 Amazon Bedrock으로 추론합니다. MCP 서버(`kb-retriever`, `use-aws`)는 `runtime_mcp/`에 별도 AgentCore Runtime으로 배포됩니다.
+
+```mermaid
+flowchart TB
+  subgraph UI["Streamlit (application/app.py)"]
+    MODE["Agent / Agent (Chat)"]
+    SEL["MCP · 모델 · 플랫폼 · Agent 타입 선택"]
+  end
+
+  subgraph Client["application/agentcore_client.py"]
+    RA[run_agent]
+    RD[run_agent_in_docker]
+  end
+
+  subgraph Runtime["AgentCore Runtime / Docker"]
+    LG["langgraph/agent.py"]
+    ST["strands/agent.py"]
+    CL["claude/agent.py"]
+  end
+
+  subgraph LangGraphStack["LangGraph (langgraph_agent.py)"]
+    LGA[StateGraph + astream]
+    LGB["Built-in: execute_code, bash, read/write_file, upload_file_to_s3"]
+    LGM[MultiServerMCPClient]
+    LGC[ChatBedrock]
+  end
+
+  subgraph StrandsStack["Strands (strands_agent.py)"]
+    SSA[Agent + stream_async]
+    SSB["Built-in: execute_code, bash, upload_file_to_s3"]
+    SST["strands_tools: current_time, file_read, file_write"]
+    SSM[MCPClientManager]
+    SSBM[BedrockModel]
+  end
+
+  subgraph ClaudeStack["Claude Agent SDK (claude_agent.py)"]
+    CSA[ClaudeSDKClient + query]
+    CSM[MCP servers via ClaudeAgentOptions]
+  end
+
+  subgraph MCPConfig["MCP Config (mcp_config.py)"]
+    LSC[load_selected_config]
+  end
+
+  subgraph MCPServers["MCP Servers (runtime_mcp/)"]
+    KB[kb-retriever · RAG retrieve]
+    UA[use-aws · AWS API]
+    AD[aws documentation · uvx]
+    UC[사용자 설정]
+  end
+
+  subgraph LLM["Amazon Bedrock"]
+    BR[Bedrock Runtime]
+  end
+
+  subgraph Storage["Artifacts / S3"]
+    ART[artifacts/]
+    S3[(S3)]
+  end
+
+  MODE --> RA
+  MODE --> RD
+  SEL --> RA
+  SEL --> RD
+
+  RA -->|invoke_agent_runtime| LG
+  RA --> ST
+  RA --> CL
+  RD -->|localhost:8080| LG
+  RD --> ST
+  RD --> CL
+
+  LG --> LGA
+  LGA --> LGC
+  LGA --> LGB
+  LGA --> LGM
+  LGC --> BR
+
+  ST --> SSA
+  SSA --> SSBM
+  SSA --> SSB
+  SSA --> SST
+  SSA --> SSM
+  SSBM --> BR
+
+  CL --> CSA
+  CSA --> CSM
+  CSA --> BR
+
+  LG --> LSC
+  ST --> LSC
+  CL --> LSC
+  LSC --> MCPServers
+  LGM --> MCPServers
+  SSM --> MCPServers
+  CSM --> MCPServers
+
+  LGB --> ART
+  LGB --> S3
+  SSB --> ART
+  SSB --> S3
+```
+
+| 모드 | 모듈 | 설명 |
+|------|------|------|
+| **Agent** | `application/app.py` → `agentcore_client.run_agent` | 단일 턴 Agent. `history_mode=Disable`로 매 요청을 독립 처리 |
+| **Agent (Chat)** | `application/app.py` → `agentcore_client.run_agent` | 대화 이력 유지. `history_mode=Enable`로 세션 기반 interactive 대화 |
+| LangGraph Runtime | `runtime_agent/langgraph/agent.py` | LangGraph StateGraph + `MultiServerMCPClient` + 내장 도구 |
+| Strands Runtime | `runtime_agent/strands/agent.py` | Strands SDK `Agent` + `MCPClientManager` + strands_tools |
+| Claude Runtime | `runtime_agent/claude/agent.py` | Claude Agent SDK `ClaudeSDKClient` + MCP |
+| MCP (RAG) | `runtime_mcp/iam_auth/kb-retriever/` | Bedrock Knowledge Base `retrieve` 도구를 AgentCore MCP Runtime으로 제공 |
+| MCP (AWS) | `runtime_mcp/iam_auth/use-aws/` | AWS API 호출 도구를 AgentCore MCP Runtime으로 제공 |
+
+플랫폼은 **AgentCore**(서버리스 Runtime)와 **Docker**(로컬 `localhost:8080`) 중 선택할 수 있으며, Agent 타입은 **langgraph** / **strands** / **claude** 중 하나를 선택합니다. MCP는 UI에서 `kb-retriever`, `use-aws`, `aws document`, `사용자 설정`을 체크박스로 선택합니다.
+
 ### AgentCore 소개
 
 - AgentCore Runtime: AI agent와 tool을 배포하고 트래픽에 따라 자동으로 확장(Scaling)이 가능한 serverless runtime입니다. LangGraph, CrewAI, Strands Agents를 포함한 다양한 오픈소스 프레임워크을 지원합니다. 빠른 cold start, 세션 격리, 내장된 신원 확인(built-in identity), multimodal payload를 지원합니다. 이를 통해 안전하고 빠른 출시가 가능합니다.
