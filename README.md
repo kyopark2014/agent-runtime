@@ -988,6 +988,14 @@ if __name__ == "__main__":
     app.run()
 ```
 
+### 리전별 사용할 수 있는 모델의 확인 방법
+
+사용할 수 있는 모델의 확인 방법은 아래와 같습니다.
+
+```text
+aws bedrock list-foundation-models --region=us-west-2 --by-provider anthropic --query "modelSummaries[*].modelId"
+```
+
 ## 실행 결과
 
 MCP server에서 "use_aws"를 선택하고, "내 cloudwatch 로그 리스트는?"라고 입력하면 AWS CLI를 이용해 AWS cloudwatch의 로그 리스트를 확인하여 아래와 같이 보여줍니다.
