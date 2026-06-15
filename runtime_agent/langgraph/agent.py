@@ -133,6 +133,7 @@ async def agent_langgraph(payload):
         multiRegion=payload.get("multi_region", chat.multi_region),
         reasoningMode=payload.get("reasoning_mode", chat.reasoning_mode),
         agentType=payload.get("agent_type", chat.agent_type),
+        userId=user_id,
     )
 
     history_mode = payload.get("history_mode")

@@ -51,8 +51,18 @@ def load_agentcore_config(agent_name):
             return agentRuntime['agentRuntimeArn']
     return None
 
-runtime_session_id = str(uuid.uuid4())
-logger.info(f"runtime_session_id: {runtime_session_id}")
+def runtime_session_id_for(user_id: str, history_mode: str) -> str:
+    """AgentCore runtimeSessionId (min length 33).
+
+    Chat mode: deterministic per user_id so history survives client restarts.
+    Agent mode: ephemeral session per request.
+    """
+    if history_mode == "Enable" and user_id:
+        session_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"agentcore-session-{user_id}"))
+    else:
+        session_id = str(uuid.uuid4())
+    logger.info(f"runtime_session_id: {session_id} (history_mode={history_mode})")
+    return session_id
 
 tool_info_list = dict()
 tool_result_list = dict()
@@ -444,7 +454,7 @@ def get_tool_info(tool_name, tool_content):
 
     return content, urls, tool_references
 
-def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_name, notification_queue=None):
+def run_agent_in_docker(prompt, user_id, agent_type, history_mode, mcp_servers, model_name, notification_queue=None):
     tool_info_list.clear()
     tool_result_list.clear()
     tool_name_list.clear()
@@ -454,7 +464,6 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
     references = []
     image_url = []
 
-    user_id = agent_type
     logger.info(f"user_id: {user_id}")
 
     payload = json.dumps({
@@ -717,7 +726,7 @@ def run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, model_nam
         logger.error(error_msg)
         return f"Error: {error_msg}", []
 
-def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, notification_queue=None):
+def run_agent(prompt, user_id, agent_type, history_mode, mcp_servers, model_name, notification_queue=None):
     tool_info_list.clear()
     tool_result_list.clear()
     tool_name_list.clear()
@@ -727,7 +736,6 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, notific
     references = []
     image_url = []
     
-    user_id = agent_type # for testing
     logger.info(f"user_id: {user_id}")
 
     payload = json.dumps({
@@ -761,9 +769,10 @@ def run_agent(prompt, agent_type, history_mode, mcp_servers, model_name, notific
             region_name=bedrock_region,
             config=boto_config
         )
+        session_id = runtime_session_id_for(user_id, history_mode)
         response = agent_core_client.invoke_agent_runtime(
             agentRuntimeArn=agent_runtime_arn,
-            runtimeSessionId=runtime_session_id,
+            runtimeSessionId=session_id,
             payload=payload,
             qualifier="DEFAULT" # DEFAULT or LATEST
         )

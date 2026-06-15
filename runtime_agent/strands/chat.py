@@ -76,13 +76,11 @@ def update(
     if agentType is not None and agent_type != agentType:
         agent_type = agentType
         logger.info(f"agent_type: {agent_type}")
-        user_id = agent_type
-        logger.info(f"user_id: {user_id}")
-        mcp_env["user_id"] = user_id
 
     if userId is not None and user_id != userId:
         user_id = userId
         logger.info(f"user_id: {user_id}")
+        mcp_env["user_id"] = user_id
 
     utils.save_mcp_env(mcp_env)
 

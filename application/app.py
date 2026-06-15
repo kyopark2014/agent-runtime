@@ -20,6 +20,26 @@ os.environ["DEV"] = "true"  # Skip user confirmation of get_user_input
 # title
 st.set_page_config(page_title='AgentCore', page_icon=None, layout="centered", initial_sidebar_state="auto", menu_items=None)
 
+
+@st.dialog("User ID 입력")
+def request_user_id() -> None:
+    st.markdown("시작하려면 User ID를 입력하세요.")
+    user_id = st.text_input("User ID", key="user_id_input", placeholder="예: user01")
+    if st.button("시작", type="primary", use_container_width=True):
+        if user_id.strip():
+            st.session_state.user_id = user_id.strip()
+            chat.user_id = user_id.strip()
+            st.rerun()
+        else:
+            st.error("User ID를 입력해주세요.")
+
+
+if not st.session_state.get("user_id"):
+    request_user_id()
+    st.stop()
+
+chat.user_id = st.session_state.user_id
+
 mode_descriptions = {
     "Agent": [
         "MCP를 활용한 Agent를 이용합니다. 왼쪽 메뉴에서 필요한 MCP를 선택하세요."
@@ -41,7 +61,7 @@ with st.sidebar:
     
     # radio selection
     mode = st.radio(
-        label="원하는 대화 형태를 선택하세요. ",options=["Agent", "Agent (Chat)"], index=0
+        label="원하는 대화 형태를 선택하세요. ",options=["Agent", "Agent (Chat)"], index=1
     )   
     st.info(mode_descriptions[mode][0])
     
@@ -193,9 +213,9 @@ if prompt := st.chat_input("메시지를 입력하세요."):
 
                 notification_queue = NotificationQueue(container=status)
                 if platform == 'AgentCore':
-                    response, image_url = agentcore_client.run_agent(prompt, agent_type, history_mode, mcp_servers, modelName, notification_queue)
+                    response, image_url = agentcore_client.run_agent(prompt, chat.user_id, agent_type, history_mode, mcp_servers, modelName, notification_queue)
                 else:                    
-                    response, image_url = agentcore_client.run_agent_in_docker(prompt, agent_type, history_mode, mcp_servers, modelName, notification_queue)
+                    response, image_url = agentcore_client.run_agent_in_docker(prompt, chat.user_id, agent_type, history_mode, mcp_servers, modelName, notification_queue)
 
             st.session_state.messages.append({
                 "role": "assistant", 

@@ -43,7 +43,7 @@ def update(modelName, userId):
         logger.info(f"model_id: {model_id}")
         logger.info(f"model_type: {model_type}")
     
-    if userId is not user_id:
+    if userId is not None and user_id != userId:
         user_id = userId
         logger.info(f"user_id: {user_id}")
 

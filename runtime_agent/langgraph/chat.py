@@ -155,7 +155,7 @@ class SimpleChatMemory:
     def clear(self):
         self.messages = []
 
-def update(modelName, debugMode, multiRegion, reasoningMode, agentType):    
+def update(modelName, debugMode, multiRegion, reasoningMode, agentType, userId=None):    
     global model_name, model_id, model_type, debug_mode, multi_region, reasoning_mode
     global models, user_id, agent_type
 
@@ -187,8 +187,8 @@ def update(modelName, debugMode, multiRegion, reasoningMode, agentType):
         agent_type = agentType
         logger.info(f"agent_type: {agent_type}")
 
-        logger.info(f"agent_type changed, update memory variables.")
-        user_id = agent_type
+    if userId is not None and user_id != userId:
+        user_id = userId
         logger.info(f"user_id: {user_id}")
         mcp_env['user_id'] = user_id
     
@@ -197,10 +197,10 @@ def update(modelName, debugMode, multiRegion, reasoningMode, agentType):
     # logger.info(f"mcp.env updated: {mcp_env}")
 
 def update_mcp_env():
+    global user_id
     mcp_env = utils.load_mcp_env()
     
     mcp_env['multi_region'] = multi_region
-    user_id = agent_type
     mcp_env['user_id'] = user_id
 
     utils.save_mcp_env(mcp_env)
@@ -217,7 +217,9 @@ memory_chain = None  # Initialize memory_chain as global variable
 def initiate():
     global memory_chain, checkpointer, memorystore, checkpointers, memorystores, user_id
 
-    user_id = uuid.uuid4().hex
+    if not user_id:
+        logger.warning("user_id is not set; skipping memory initialization")
+        return
 
     # general conversation memory
     if user_id in map_chain:  

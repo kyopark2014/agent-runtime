@@ -120,7 +120,7 @@ async def agentcore_strands(payload):
     # Model / user: mirror LangGraph agent.py payload fields on chat.update.
     chat.update(
         modelName=model_name if model_name else chat.model_name,
-        userId=user_id if user_id else chat.user_id,
+        userId=user_id,
         debugMode=payload.get("debug_mode", chat.debug_mode),
         multiRegion=payload.get("multi_region", chat.multi_region),
         reasoningMode=payload.get("reasoning_mode", chat.reasoning_mode),
