@@ -72,10 +72,10 @@ with st.sidebar:
 
         # Change radio to checkbox
         mcp_options = [
-            "kb-retriever", "use-aws", "aws document", "사용자 설정"
+            "kb-retriever", "use-aws", "websearch", "aws document", "사용자 설정"
         ]
         mcp_selections = {}
-        default_selections = ["kb-retriever", "use-aws"]
+        default_selections = ["kb-retriever", "use-aws", "websearch"]
 
         with st.expander("MCP 옵션 선택", expanded=True):            
             # Create two columns

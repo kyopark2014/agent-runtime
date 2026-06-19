@@ -25,15 +25,31 @@ logger = logging.getLogger("agent")
 # For JWT-only runtimes, set auth_type to "jwt".
 _original_httpx_async_init = httpx.AsyncClient.__init__
 
+def _sigv4_region_for_bedrock_agentcore_url(url: str) -> str:
+    host = urlparse(url).netloc
+    parts = host.split(".")
+    try:
+        idx = parts.index("bedrock-agentcore")
+        if idx + 1 < len(parts) and parts[idx + 1] != "amazonaws":
+            return parts[idx + 1]
+    except ValueError:
+        pass
+    return utils.load_config().get("region", "us-west-2")
+
 def _patched_httpx_async_init(self, *args, **kwargs):
     async def sign_request(request: httpx.Request) -> None:
-        if "bedrock-agentcore" not in str(request.url):
+        url_str = str(request.url)
+        if "bedrock-agentcore" not in url_str:
+            return
+        if ".gateway.bedrock-agentcore." in url_str:
+            return
+        if request.headers.get("Authorization"):
             return
 
         boto_session = boto3.Session()
         credentials = boto_session.get_credentials().get_frozen_credentials()
 
-        parsed_url = urlparse(str(request.url))
+        parsed_url = urlparse(url_str)
         host = parsed_url.netloc
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
@@ -60,12 +76,12 @@ def _patched_httpx_async_init(self, *args, **kwargs):
 
         aws_request = AWSRequest(
             method=request.method,
-            url=str(request.url),
+            url=url_str,
             headers=aws_headers,
             data=body,
         )
 
-        region = utils.load_config().get("region", "us-west-2")
+        region = _sigv4_region_for_bedrock_agentcore_url(url_str)
         auth = BotocoreSigV4Auth(credentials, "bedrock-agentcore", region)
         auth.add_auth(aws_request)
 

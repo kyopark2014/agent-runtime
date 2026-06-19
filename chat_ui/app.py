@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Default MCP servers (fixed for this UI).
-DEFAULT_MCP_SERVERS = ["kb-retriever", "use-aws", "aws document"]
+DEFAULT_MCP_SERVERS = ["kb-retriever", "use-aws", "websearch", "aws document"]
 
 # chat.debug_mode: when "Enable", stream SSE info/chunk events for agentcore_client output.
 _DEFAULT_DEBUG = "Enable"

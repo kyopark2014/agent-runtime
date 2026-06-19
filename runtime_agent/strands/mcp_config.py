@@ -26,6 +26,22 @@ logger.info(f"workingDir: {workingDir}")
 
 mcp_user_config = {}    
 
+def get_agentcore_gateway_mcp_url(gateway_name: str, gateway_region: str) -> str | None:
+    client = boto3.client("bedrock-agentcore-control", region_name=gateway_region)
+    try:
+        response = client.list_gateways()
+        for item in response.get("items", []):
+            if item.get("name") != gateway_name:
+                continue
+
+            gateway_id = item["gatewayId"]
+            gateway = client.get_gateway(gatewayIdentifier=gateway_id)
+            return gateway["gatewayUrl"].rstrip("/")
+    except Exception as e:
+        logger.error(f"Error resolving AgentCore gateway URL for {gateway_name}: {e}")
+
+    return None
+
 def get_agent_runtime_arn(mcp_type: str):
     #logger.info(f"mcp_type: {mcp_type}")
     agent_runtime_name = f"{projectName.lower().replace('-', '_')}_{mcp_type.replace('-', '_')}"
@@ -95,6 +111,26 @@ def load_config(mcp_type):
             }
         }    
     
+    elif mcp_type == "websearch":
+        gateway_url = get_agentcore_gateway_mcp_url("gateway-websearch", "us-east-1")
+        if not gateway_url:
+            logger.info(
+                "AgentCore gateway websearch MCP skipped: "
+                "gateway-websearch not found in us-east-1."
+            )
+            return {}
+        return {
+            "mcpServers": {
+                "gateway-websearch": {
+                    "type": "streamable_http",
+                    "url": gateway_url,
+                    "auth_type": "aws_sigv4",
+                    "auth_region": "us-east-1",
+                    "auth_service": "bedrock-agentcore",
+                }
+            }
+        }
+
     elif mcp_type == "aws_documentation":
         return {
             "mcpServers": {
