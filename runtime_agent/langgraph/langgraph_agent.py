@@ -586,7 +586,10 @@ async def call_model(state: State, config):
                 messages.append(tool_msg)
             else:
                 messages.append(msg)
-        
+
+        if chat.uses_adaptive_thinking():
+            messages = chat.sanitize_messages_for_bedrock(messages)
+
         prompt = ChatPromptTemplate.from_messages(
             [
                 ("system", system),
@@ -610,6 +613,8 @@ async def call_model(state: State, config):
             response = merged if isinstance(merged, AIMessage) else AIMessage(
                 content=getattr(merged, "content", str(merged))
             )
+        if chat.uses_adaptive_thinking():
+            response = chat.sanitize_messages_for_bedrock([response])[0]
         logger.info(f"response of call_model: {response}")
 
     except Exception:
@@ -685,8 +690,11 @@ async def plan_node(state: State, config):
             ]
         )
         chain = prompt | chatModel
-            
-        result = await chain.ainvoke(state["messages"])
+
+        plan_messages = state["messages"]
+        if chat.uses_adaptive_thinking():
+            plan_messages = chat.sanitize_messages_for_bedrock(plan_messages)
+        result = await chain.ainvoke({"messages": plan_messages})
         # logger.info(f"result of plan_node: {result.content}")
 
         plan = result.content[result.content.find('<plan>')+6:result.content.find('</plan>')]

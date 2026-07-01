@@ -27,6 +27,9 @@ def load_config():
 
 config = load_config()
 
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.json")
+
 bedrock_region = config['region']
 accountId = config['accountId']
 projectName = config['projectName']
