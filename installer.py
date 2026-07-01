@@ -12,7 +12,6 @@ import argparse
 import base64
 import ipaddress
 import subprocess
-import shutil
 import os
 import sys
 from datetime import datetime
