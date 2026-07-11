@@ -532,7 +532,13 @@ def push_to_ecr():
         
         # Build Docker image
         if not run_docker_command(
-            ["docker", "build", "-t", f"{ecr_repository}:{image_tag}", "."],
+            [
+                "docker", "build",
+                "--provenance=false",
+                "--sbom=false",
+                "-t", f"{ecr_repository}:{image_tag}",
+                ".",
+            ],
             "Building Docker Image"
         ):
             return False
