@@ -1889,12 +1889,15 @@ def run_rag_with_knowledge_base(query, st):
         raise Exception ("Not able to request to LLM")
     
     if relevant_docs:
-        ref = "\n\n### Reference\n"
-        for i, doc in enumerate(relevant_docs):
-            page_content = doc["contents"][:100].replace("\n", "")
-            ref += f"{i+1}. [{doc["reference"]['title']}]({doc["reference"]['url']}), {page_content}...\n"    
-        logger.info(f"ref: {ref}")
-        msg += ref
+        refs = [
+            {
+                "title": doc["reference"]["title"],
+                "url": doc["reference"]["url"],
+                "content": doc["contents"],
+            }
+            for doc in relevant_docs
+        ]
+        msg += _format_references_markdown(refs)
     
     return msg, reference_docs
    
@@ -1935,6 +1938,32 @@ tool_input_list = dict()
 
 sharing_url = path
 capture_prefix = "captures"
+
+def _sanitize_reference_text(text: str, max_len: int) -> str:
+    """Collapse whitespace/newlines and strip markdown that breaks list links."""
+    if not text:
+        return ""
+    cleaned = " ".join(str(text).replace("\r", "\n").split())
+    cleaned = cleaned.replace("```", "`").replace("[", "\\[").replace("]", "\\]")
+    if len(cleaned) > max_len:
+        cleaned = cleaned[: max_len - 3].rstrip(" .") + "..."
+    return cleaned
+
+
+def _format_references_markdown(references: list) -> str:
+    """Build a Reference section safe for markdown list rendering."""
+    lines = ["\n\n### Reference"]
+    for i, reference in enumerate(references, start=1):
+        title = _sanitize_reference_text(reference.get("title") or "Untitled", 120)
+        content = _sanitize_reference_text(reference.get("content") or "", 100)
+        url = (reference.get("url") or "").strip()
+        if url:
+            lines.append(f"{i}. [{title}]({url}) — {content}" if content else f"{i}. [{title}]({url})")
+        else:
+            lines.append(f"{i}. {title} — {content}" if content else f"{i}. {title}")
+    return "\n".join(lines) + "\n"
+
+
 
 def get_tool_info(tool_name, tool_content):
     tool_references = []    
@@ -2363,11 +2392,7 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, notification_que
     logger.info(f"result: {result}")
 
     if references:
-        ref = "\n\n### Reference\n"
-        for i, reference in enumerate(references):
-            page_content = reference['content'][:100].replace("\n", "")
-            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {page_content}...\n"    
-        result += ref
+        result += _format_references_markdown(references)
     
     if notification_queue is not None and debug_mode == "Enable":
         update_final_result(notification_queue, result)
@@ -2495,11 +2520,7 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, notification_queue):
     logger.info(f"result: {result}")
 
     if references:
-        ref = "\n\n### Reference\n"
-        for i, reference in enumerate(references):
-            page_content = reference['content'][:100].replace("\n", "")
-            ref += f"{i+1}. [{reference['title']}]({reference['url']}), {page_content}...\n"    
-        result += ref
+        result += _format_references_markdown(references)
     
     if notification_queue is not None:
         update_final_result(notification_queue, result)

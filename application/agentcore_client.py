@@ -104,6 +104,32 @@ def normalize_bedrock_message_content(content):
     return str(content)
 
 
+def _sanitize_reference_text(text: str, max_len: int) -> str:
+    """Collapse whitespace/newlines and strip markdown that breaks list links."""
+    if not text:
+        return ""
+    cleaned = " ".join(str(text).replace("\r", "\n").split())
+    cleaned = cleaned.replace("```", "`").replace("[", "\\[").replace("]", "\\]")
+    if len(cleaned) > max_len:
+        cleaned = cleaned[: max_len - 3].rstrip(" .") + "..."
+    return cleaned
+
+
+def _format_references_markdown(references: list) -> str:
+    """Build a Reference section safe for markdown list rendering."""
+    lines = ["\n\n### Reference"]
+    for i, reference in enumerate(references, start=1):
+        title = _sanitize_reference_text(reference.get("title") or "Untitled", 120)
+        content = _sanitize_reference_text(reference.get("content") or "", 100)
+        url = (reference.get("url") or "").strip()
+        if url:
+            lines.append(f"{i}. [{title}]({url}) — {content}" if content else f"{i}. [{title}]({url})")
+        else:
+            lines.append(f"{i}. {title} — {content}" if content else f"{i}. {title}")
+    return "\n".join(lines) + "\n"
+
+
+
 def get_tool_info(tool_name, tool_content):
     tool_references = []    
     urls = []
@@ -951,10 +977,7 @@ def run_agent(prompt, user_id, agent_type, history_mode, mcp_servers, model_name
                             break
         
         if references:
-            ref = "\n\n### Reference\n"
-            for i, reference in enumerate(references):
-                ref += f"{i+1}. [{reference['title']}]({reference['url']}), {reference['content']}...\n"    
-            result += ref
+            result += _format_references_markdown(references)
 
         if notification_queue is not None:
             notification_queue.result(result)
