@@ -122,12 +122,36 @@ def _format_references_markdown(references: list) -> str:
         title = _sanitize_reference_text(reference.get("title") or "Untitled", 120)
         content = _sanitize_reference_text(reference.get("content") or "", 100)
         url = (reference.get("url") or "").strip()
+        page = reference.get("page")
+        page_suffix = f" , {page} page" if page is not None else ""
         if url:
-            lines.append(f"{i}. [{title}]({url}) — {content}" if content else f"{i}. [{title}]({url})")
+            lines.append(
+                f"{i}. [{title}]({url}){page_suffix} — {content}" if content
+                else f"{i}. [{title}]({url}){page_suffix}"
+            )
         else:
-            lines.append(f"{i}. {title} — {content}" if content else f"{i}. {title}")
+            lines.append(
+                f"{i}. {title}{page_suffix} — {content}" if content
+                else f"{i}. {title}{page_suffix}"
+            )
     return "\n".join(lines) + "\n"
 
+
+
+
+def _build_tool_reference(ref_item: dict) -> dict:
+    """Build a display reference from a RAG doc item."""
+    reference = ref_item.get("reference") or {}
+    contents = ref_item.get("contents") or ""
+    content_text = contents[:100] + "..." if len(contents) > 100 else contents
+    result = {
+        "url": reference.get("url"),
+        "title": reference.get("title"),
+        "content": content_text,
+    }
+    if reference.get("page") is not None:
+        result["page"] = reference["page"]
+    return result
 
 
 def get_tool_info(tool_name, tool_content):
@@ -451,27 +475,13 @@ def get_tool_info(tool_name, tool_content):
                 for item in json_data:
                     logger.info(f"item: {item}")
                     if "reference" in item and "contents" in item:
-                        url = item["reference"]["url"]
-                        title = item["reference"]["title"]
-                        content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
-                        tool_references.append({
-                            "url": url,
-                            "title": title,
-                            "content": content_text
-                        })
+                        tool_references.append(_build_tool_reference(item))
             else:
                 logger.info(f"json_data is not a dict: {json_data}")
 
                 for item in json_data:
                     if "reference" in item and "contents" in item:
-                        url = item["reference"]["url"]
-                        title = item["reference"]["title"]
-                        content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
-                        tool_references.append({
-                            "url": url,
-                            "title": title,
-                            "content": content_text
-                        })
+                        tool_references.append(_build_tool_reference(item))
                 
             logger.info(f"tool_references: {tool_references}")
 

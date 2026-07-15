@@ -1834,13 +1834,26 @@ def retrieve(query):
                 url = location["webLocation"]["url"] if location["webLocation"]["url"] is not None else ""
                 name = "WEB"
 
+        page = None
+        raw_page = (result.get("metadata") or {}).get("x-amz-bedrock-kb-document-page-number")
+        if raw_page is not None:
+            try:
+                # Bedrock KB uses 0-based page numbers; convert to 1-based for display
+                page = int(raw_page) + 1
+            except (TypeError, ValueError):
+                page = raw_page
+
+        reference = {
+            "url": url,
+            "title": name,
+            "from": "RAG",
+        }
+        if page is not None:
+            reference["page"] = page
+
         json_docs.append({
-            "contents": text,              
-            "reference": {
-                "url": url,                   
-                "title": name,
-                "from": "RAG"
-            }
+            "contents": text,
+            "reference": reference,
         })
     logger.info(f"json_docs: {json_docs}")
 
@@ -1889,14 +1902,16 @@ def run_rag_with_knowledge_base(query, st):
         raise Exception ("Not able to request to LLM")
     
     if relevant_docs:
-        refs = [
-            {
+        refs = []
+        for doc in relevant_docs:
+            ref = {
                 "title": doc["reference"]["title"],
                 "url": doc["reference"]["url"],
                 "content": doc["contents"],
             }
-            for doc in relevant_docs
-        ]
+            if doc["reference"].get("page") is not None:
+                ref["page"] = doc["reference"]["page"]
+            refs.append(ref)
         msg += _format_references_markdown(refs)
     
     return msg, reference_docs
@@ -1957,12 +1972,36 @@ def _format_references_markdown(references: list) -> str:
         title = _sanitize_reference_text(reference.get("title") or "Untitled", 120)
         content = _sanitize_reference_text(reference.get("content") or "", 100)
         url = (reference.get("url") or "").strip()
+        page = reference.get("page")
+        page_suffix = f" , {page} page" if page is not None else ""
         if url:
-            lines.append(f"{i}. [{title}]({url}) — {content}" if content else f"{i}. [{title}]({url})")
+            lines.append(
+                f"{i}. [{title}]({url}){page_suffix} — {content}" if content
+                else f"{i}. [{title}]({url}){page_suffix}"
+            )
         else:
-            lines.append(f"{i}. {title} — {content}" if content else f"{i}. {title}")
+            lines.append(
+                f"{i}. {title}{page_suffix} — {content}" if content
+                else f"{i}. {title}{page_suffix}"
+            )
     return "\n".join(lines) + "\n"
 
+
+
+
+def _build_tool_reference(ref_item: dict) -> dict:
+    """Build a display reference from a RAG doc item."""
+    reference = ref_item.get("reference") or {}
+    contents = ref_item.get("contents") or ""
+    content_text = contents[:100] + "..." if len(contents) > 100 else contents
+    result = {
+        "url": reference.get("url"),
+        "title": reference.get("title"),
+        "content": content_text,
+    }
+    if reference.get("page") is not None:
+        result["page"] = reference["page"]
+    return result
 
 
 def get_tool_info(tool_name, tool_content):
@@ -2181,14 +2220,7 @@ def get_tool_info(tool_name, tool_content):
                 for item in json_data:
                     logger.info(f"item: {item}")
                     if "reference" in item and "contents" in item:
-                        url = item["reference"]["url"]
-                        title = item["reference"]["title"]
-                        content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
-                        tool_references.append({
-                            "url": url,
-                            "title": title,
-                            "content": content_text
-                        })
+                        tool_references.append(_build_tool_reference(item))
             elif isinstance(json_data, list):
                 logger.info(f"json_data is a list: {json_data}")
                 for item in json_data:
@@ -2203,37 +2235,16 @@ def get_tool_info(tool_name, tool_content):
                                 # 파싱된 JSON이 리스트인 경우
                                 for ref_item in text_json:
                                     if isinstance(ref_item, dict) and "reference" in ref_item and "contents" in ref_item:
-                                        url = ref_item["reference"]["url"]
-                                        title = ref_item["reference"]["title"]
-                                        content_text = ref_item["contents"][:100] + "..." if len(ref_item["contents"]) > 100 else ref_item["contents"]
-                                        tool_references.append({
-                                            "url": url,
-                                            "title": title,
-                                            "content": content_text
-                                        })
+                                        tool_references.append(_build_tool_reference(ref_item))
                             elif isinstance(text_json, dict) and "reference" in text_json and "contents" in text_json:
                                 # 파싱된 JSON이 딕셔너리인 경우
-                                url = text_json["reference"]["url"]
-                                title = text_json["reference"]["title"]
-                                content_text = text_json["contents"][:100] + "..." if len(text_json["contents"]) > 100 else text_json["contents"]
-                                tool_references.append({
-                                    "url": url,
-                                    "title": title,
-                                    "content": content_text
-                                })
+                                tool_references.append(_build_tool_reference(text_json))
                         except (json.JSONDecodeError, TypeError) as e:
                             logger.warning(f"Failed to parse text JSON: {e}")
                             pass
                     elif isinstance(item, dict) and "reference" in item and "contents" in item:
                         # 리스트 항목이 직접 reference를 가지고 있는 경우
-                        url = item["reference"]["url"]
-                        title = item["reference"]["title"]
-                        content_text = item["contents"][:100] + "..." if len(item["contents"]) > 100 else item["contents"]
-                        tool_references.append({
-                            "url": url,
-                            "title": title,
-                            "content": content_text
-                        })
+                        tool_references.append(_build_tool_reference(item))
                 
             logger.info(f"tool_references: {tool_references}")
 

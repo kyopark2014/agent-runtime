@@ -985,6 +985,39 @@ selected_strands_tools = []
 selected_mcp_servers = []
 active_plugin = None
 
+
+def _sanitize_reference_text(text: str, max_len: int) -> str:
+    """Collapse whitespace/newlines and strip markdown that breaks list links."""
+    if not text:
+        return ""
+    cleaned = " ".join(str(text).replace("\r", "\n").split())
+    cleaned = cleaned.replace("```", "`").replace("[", "\\[").replace("]", "\\]")
+    if len(cleaned) > max_len:
+        cleaned = cleaned[: max_len - 3].rstrip(" .") + "..."
+    return cleaned
+
+
+def _format_references_markdown(references: list) -> str:
+    """Build a Reference section safe for markdown list rendering."""
+    lines = ["\n\n### Reference"]
+    for i, reference in enumerate(references, start=1):
+        title = _sanitize_reference_text(reference.get("title") or "Untitled", 120)
+        content = _sanitize_reference_text(reference.get("content") or "", 100)
+        url = (reference.get("url") or "").strip()
+        page = reference.get("page")
+        page_suffix = f" , {page} page" if page is not None else ""
+        if url:
+            lines.append(
+                f"{i}. [{title}]({url}){page_suffix} — {content}" if content
+                else f"{i}. [{title}]({url}){page_suffix}"
+            )
+        else:
+            lines.append(
+                f"{i}. {title}{page_suffix} — {content}" if content
+                else f"{i}. {title}{page_suffix}"
+            )
+    return "\n".join(lines) + "\n"
+
 async def run_strands_agent(query: str, strands_tools: list[str], mcp_servers: list[str], plugin_name: Optional[str], notification_queue):
     """Run the strands agent with streaming and tool notifications."""
     queue = notification_queue
@@ -1086,31 +1119,6 @@ async def run_strands_agent(query: str, strands_tools: list[str], mcp_servers: l
 
             else:
                 logger.info(f"event: {event}")
-
-def _sanitize_reference_text(text: str, max_len: int) -> str:
-    """Collapse whitespace/newlines and strip markdown that breaks list links."""
-    if not text:
-        return ""
-    cleaned = " ".join(str(text).replace("\r", "\n").split())
-    cleaned = cleaned.replace("```", "`").replace("[", "\\[").replace("]", "\\]")
-    if len(cleaned) > max_len:
-        cleaned = cleaned[: max_len - 3].rstrip(" .") + "..."
-    return cleaned
-
-
-def _format_references_markdown(references: list) -> str:
-    """Build a Reference section safe for markdown list rendering."""
-    lines = ["\n\n### Reference"]
-    for i, reference in enumerate(references, start=1):
-        title = _sanitize_reference_text(reference.get("title") or "Untitled", 120)
-        content = _sanitize_reference_text(reference.get("content") or "", 100)
-        url = (reference.get("url") or "").strip()
-        if url:
-            lines.append(f"{i}. [{title}]({url}) — {content}" if content else f"{i}. [{title}]({url})")
-        else:
-            lines.append(f"{i}. {title} — {content}" if content else f"{i}. {title}")
-    return "\n".join(lines) + "\n"
-
 
 
         if references:
