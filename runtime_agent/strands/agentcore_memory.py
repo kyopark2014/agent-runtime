@@ -60,20 +60,8 @@ def sanitize_memory_actor_id(user_id: str) -> str:
 
 
 def resolve_memory_actor_id(user_id: str) -> str:
-    """
-    Map application user_id → AgentCore Memory actor_id.
-
-    Optional config.json:
-      "memory_actor_aliases": {"user@example.com": "local_id"}
-    Then sanitize so namespaces never contain @ / .
-    """
-    raw = (user_id or "").strip() or "default"
-    aliases = config.get("memory_actor_aliases") or {}
-    if isinstance(aliases, dict) and raw in aliases and aliases[raw]:
-        mapped = str(aliases[raw]).strip()
-        logger.info(f"memory actor alias: {raw!r} -> {mapped!r}")
-        raw = mapped
-    actor_id = sanitize_memory_actor_id(raw)
+    """Map application user_id → API-safe AgentCore Memory actor_id."""
+    actor_id = sanitize_memory_actor_id(user_id)
     if actor_id != (user_id or "").strip():
         logger.info(f"memory actor_id sanitized: {user_id!r} -> {actor_id!r}")
     return actor_id
