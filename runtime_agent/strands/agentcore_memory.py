@@ -9,6 +9,7 @@ import time
 from typing import Dict, Optional, Required
 from bedrock_agentcore.memory import MemoryClient
 from datetime import datetime, timezone
+import re
 
 logging.basicConfig(
     level=logging.INFO,  # Default to INFO level
@@ -38,6 +39,45 @@ agentcore_memory_role = config['agentcore_memory_role']
 
 memory_client = MemoryClient(region_name=bedrock_region)    
 
+
+
+# AgentCore Memory namespace pattern:
+# [a-zA-Z0-9/*][a-zA-Z0-9-_/*]*(?::[a-zA-Z0-9-_/*]+)*[a-zA-Z0-9-_/*]*
+# Emails (@, .) are invalid and cause ValidationException on retrieve.
+_INVALID_ACTOR_CHARS = re.compile(r"[^a-zA-Z0-9_-]+")
+
+
+def sanitize_memory_actor_id(user_id: str) -> str:
+    """Make a user id safe for AgentCore Memory actor_id / namespace / strategy name."""
+    raw = (user_id or "").strip() or "default"
+    cleaned = _INVALID_ACTOR_CHARS.sub("_", raw).strip("_")
+    cleaned = re.sub(r"_+", "_", cleaned)
+    if not cleaned:
+        cleaned = "default"
+    if not re.match(r"^[a-zA-Z0-9]", cleaned):
+        cleaned = f"u_{cleaned}"
+    return cleaned[:128]
+
+
+def resolve_memory_actor_id(user_id: str) -> str:
+    """
+    Map application user_id → AgentCore Memory actor_id.
+
+    Optional config.json:
+      "memory_actor_aliases": {"user@example.com": "local_id"}
+    Then sanitize so namespaces never contain @ / .
+    """
+    raw = (user_id or "").strip() or "default"
+    aliases = config.get("memory_actor_aliases") or {}
+    if isinstance(aliases, dict) and raw in aliases and aliases[raw]:
+        mapped = str(aliases[raw]).strip()
+        logger.info(f"memory actor alias: {raw!r} -> {mapped!r}")
+        raw = mapped
+    actor_id = sanitize_memory_actor_id(raw)
+    if actor_id != (user_id or "").strip():
+        logger.info(f"memory actor_id sanitized: {user_id!r} -> {actor_id!r}")
+    return actor_id
+
 def load_memory_variables(user_id: str):
     memory_id = actor_id = session_id = namespace = None
     try:
@@ -66,8 +106,9 @@ def load_memory_variables(user_id: str):
         logger.error(f"Error loading agentcore config: {e}")
         pass
 
-    if actor_id is None:
-        actor_id = user_id
+    # Always resolve to API-safe actor (ignore cached raw emails)
+    actor_id = resolve_memory_actor_id(user_id)
+    namespace = f"/users/{actor_id}"
     if session_id is None:
         session_id = uuid.uuid4().hex
     if namespace is None:
