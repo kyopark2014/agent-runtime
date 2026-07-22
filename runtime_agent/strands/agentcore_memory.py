@@ -96,11 +96,11 @@ def load_memory_variables(user_id: str):
 
     # Always resolve to API-safe actor (ignore cached raw emails)
     actor_id = resolve_memory_actor_id(user_id)
-    namespace = f"/users/{actor_id}"
+    namespace = f"/users/{actor_id}/preferences"
     if session_id is None:
         session_id = uuid.uuid4().hex
     if namespace is None:
-        namespace = f"/users/{actor_id}"
+        namespace = f"/users/{actor_id}/preferences"
     
     return memory_id, actor_id, session_id, namespace
 
@@ -188,7 +188,7 @@ SUMMARY_PROMPT = (
     "Use Korean.\n"
 )
 
-SEMENTIC_PROMPT = (
+SEMANTIC_PROMPT = (
     "You are a long-term memory extraction agent supporting a lifelong learning system.\n"
     "Your task is to identify and extract meaningful information about the users from a given list of messages.\n"
     "Analyze the conversation and extract structured information about the user according to the schema below.\n"
@@ -198,6 +198,17 @@ SEMENTIC_PROMPT = (
     "- Do NOT extract anything from prior conversation history, even if provided. Use it solely for context.\n"
     "- Do NOT incorporate external knowledge.\n"
     "- Avoid duplicate extractions.\n"
+    "Use Korean.\n"
+)
+
+# Backward-compatible alias
+SEMENTIC_PROMPT = SEMANTIC_PROMPT
+
+SEMANTIC_CONSOLIDATION_PROMPT = (
+    "You consolidate newly extracted facts with existing long-term semantic memories.\n"
+    "- Merge duplicates; keep the most specific and recent facts.\n"
+    "- Do not invent facts that were not extracted.\n"
+    "- Prefer clear, atomic statements in Korean.\n"
     "Use Korean.\n"
 )
 
@@ -222,69 +233,148 @@ def load_memory_strategy(memory_id: str):
     logger.info(f"strategies: {strategies}")
     return strategies
 
-def add_strategy(memory_id: str, namespace: str):
-    strategy = {
-            "customMemoryStrategy": {
-                "name": chat.user_id,
-                "namespaces": [namespace],
-                "configuration" : {
-                    "userPreferenceOverride" : {
-                        "extraction" : {
-                            "modelId" : "anthropic.claude-3-5-sonnet-20241022-v2:0",
-                            "appendToPrompt": USER_PREFERENCE_PROMPT
-                        }
+# Must be an inference profile available in the configured region (us-west-2).
+# Foundation IDs like anthropic.claude-3-5-haiku-... fail UpdateMemory with:
+# "Bedrock model is not available in region us-west-2"
+MEMORY_EXTRACTION_MODEL_ID = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+# Shared strategies per memory_id (not per actor). Isolation via {actorId}/{sessionId}.
+# AgentCore allows at most 6 strategies per memory — treat that as strategy *kinds*.
+USER_PREFERENCE_STRATEGY_NAME = "UserPreference"
+# Prefer a leaf path so /users/{actorId} does not prefix-match /facts or /sessions.
+USER_PREFERENCE_NAMESPACE_TEMPLATE = "/users/{actorId}/preferences"
+SUMMARY_STRATEGY_NAME = "Summary"
+# AgentCore requires {sessionId} in Summary strategy namespaces.
+SUMMARY_NAMESPACE_TEMPLATE = "/users/{actorId}/sessions/{sessionId}"
+SEMANTIC_STRATEGY_NAME = "Semantic"
+SEMANTIC_NAMESPACE_TEMPLATE = "/users/{actorId}/facts"
+
+
+def _strategy_namespaces(strategy: dict) -> list:
+    return list(strategy.get("namespaces") or strategy.get("namespaceTemplates") or [])
+
+
+def _existing_strategy_names(strategies: list) -> set:
+    return {(s.get("name") or "") for s in (strategies or []) if s.get("name")}
+
+
+def _build_user_preference_strategy() -> dict:
+    return {
+        "customMemoryStrategy": {
+            "name": USER_PREFERENCE_STRATEGY_NAME,
+            "namespaces": [USER_PREFERENCE_NAMESPACE_TEMPLATE],
+            "configuration": {
+                "userPreferenceOverride": {
+                    "extraction": {
+                        "modelId": MEMORY_EXTRACTION_MODEL_ID,
+                        "appendToPrompt": USER_PREFERENCE_PROMPT,
                     }
                 }
-            }
+            },
         }
+    }
+
+
+def _build_summary_strategy() -> dict:
+    # Summary override supports consolidation only (no extraction step).
+    return {
+        "customMemoryStrategy": {
+            "name": SUMMARY_STRATEGY_NAME,
+            "namespaces": [SUMMARY_NAMESPACE_TEMPLATE],
+            "configuration": {
+                "summaryOverride": {
+                    "consolidation": {
+                        "modelId": MEMORY_EXTRACTION_MODEL_ID,
+                        "appendToPrompt": SUMMARY_PROMPT,
+                    }
+                }
+            },
+        }
+    }
+
+
+def _build_semantic_strategy() -> dict:
+    return {
+        "customMemoryStrategy": {
+            "name": SEMANTIC_STRATEGY_NAME,
+            "namespaces": [SEMANTIC_NAMESPACE_TEMPLATE],
+            "configuration": {
+                "semanticOverride": {
+                    "extraction": {
+                        "modelId": MEMORY_EXTRACTION_MODEL_ID,
+                        "appendToPrompt": SEMANTIC_PROMPT,
+                    },
+                    "consolidation": {
+                        "modelId": MEMORY_EXTRACTION_MODEL_ID,
+                        "appendToPrompt": SEMANTIC_CONSOLIDATION_PROMPT,
+                    },
+                }
+            },
+        }
+    }
+
+
+def shared_memory_strategies() -> list:
+    """Strategy definitions shared by create_memory / installer / ensure."""
+    return [
+        _build_user_preference_strategy(),
+        _build_summary_strategy(),
+        _build_semantic_strategy(),
+    ]
+
+
+def add_strategy(memory_id: str, strategy: dict):
+    name = (strategy.get("customMemoryStrategy") or {}).get("name")
+    namespaces = (strategy.get("customMemoryStrategy") or {}).get("namespaces")
     memory_client.add_strategy(memory_id, strategy)
-    logger.info(f"strategy was added to memory_id: {memory_id}")
+    logger.info(
+        f"Added shared strategy {name!r} namespaces={namespaces!r} to memory_id={memory_id}"
+    )
     time.sleep(5)
 
-def create_strategy_if_not_exists(memory_id: str, namespace: str, strategy_name: str):
-    # create strategy if not exists
-    has_strategy = False
-    strategies = load_memory_strategy(memory_id)
-    for strategy in strategies:
-        logger.info(f"strategy: {strategy}")
-        if strategy.get("name") == strategy_name:
-            logger.info(f"UserPreference strategy found")
-            has_strategy = True
-            break
-    if not has_strategy:
-        logger.info(f"UserPreference strategy not found, adding...")
-        add_strategy(memory_id, namespace)
-        logger.info(f"UserPreference strategy was added...")
 
-def create_memory(namespace: str):
+def create_strategy_if_not_exists(memory_id: str):
+    """
+    Ensure this memory_id has the shared UserPreference / Summary / Semantic strategies.
+
+    Do NOT create a strategy per actor_id — that hits the 6-strategy quota.
+    """
+    try:
+        strategies = load_memory_strategy(memory_id)
+        for strategy in strategies or []:
+            logger.info(f"strategy: {strategy}")
+        existing = _existing_strategy_names(strategies)
+        for strategy_def in shared_memory_strategies():
+            name = strategy_def["customMemoryStrategy"]["name"]
+            if name in existing:
+                logger.info(f"Shared strategy already present: {name}")
+                continue
+            logger.info(f"{name} strategy not found, adding...")
+            try:
+                add_strategy(memory_id, strategy_def)
+                existing.add(name)
+                logger.info(f"{name} strategy was added...")
+            except Exception as add_err:
+                logger.error(f"Failed to add strategy {name!r}: {add_err}")
+    except Exception as e:
+        # Do not block CreateEvent short-term save if strategy UpdateMemory fails
+        logger.error(f"Failed to ensure memory strategy (continuing without update): {e}")
+
+
+def create_memory():
+    """Create project Memory with shared UserPreference + Summary + Semantic strategies."""
     result = memory_client.create_memory_and_wait(
         name=projectName.replace("-", "_"),
         description=f"Memory for {projectName}",
-        event_expiry_days=365, # 7 - 365 days
-        # memory_execution_role_arn=memory_execution_role_arn
-        strategies=[{
-            #"userPreferenceMemoryStrategy": {
-            "customMemoryStrategy": {
-                "name": chat.user_id,
-                "namespaces": [namespace],
-                "configuration" : {
-                    "userPreferenceOverride" : {
-                        "extraction" : {
-                            "modelId" : "anthropic.claude-3-5-sonnet-20241022-v2:0",
-                            "appendToPrompt": USER_PREFERENCE_PROMPT
-                        }
-                    }
-                }
-            }
-        }],
-        memory_execution_role_arn=agentcore_memory_role
+        event_expiry_days=365,  # 7 - 365 days
+        strategies=shared_memory_strategies(),
+        memory_execution_role_arn=agentcore_memory_role,
     )
     logger.info(f"result of memory creation: {result}")
-    memory_id = result.get('id')
+    memory_id = result.get("id")
     logger.info(f"created memory_id: {memory_id}")
-
     return memory_id
-    
+
 def save_conversation_to_memory(memory_id, actor_id, session_id, query, result):
     logger.info(f"###### save_conversation_to_memory ######")
 
