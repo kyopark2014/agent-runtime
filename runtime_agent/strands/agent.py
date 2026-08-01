@@ -173,6 +173,7 @@ async def agentcore_strands(payload):
         # Always use a dict so the final SSE event is JSON with .get("messages") on the client.
         final_output: dict = {"messages": "", "image_url": []}
         streamed_text = ""
+        stop_reason: str | None = None
         async for event in agent_stream:
             text = ""            
             if "data" in event:
@@ -182,11 +183,14 @@ async def agentcore_strands(payload):
                 yield({'data': text})
 
             elif "result" in event:
-                final = event["result"]                
+                final = event["result"]
+                stop_reason = getattr(final, "stop_reason", None)
+                if stop_reason:
+                    logger.info(f"[stop_reason] {stop_reason}")
                 message = final.message
                 if message:
                     content = message.get("content", [])
-                    text = content[0].get("text", "")
+                    text = content[0].get("text", "") if content else ""
                     logger.info(f"[result] {text}")
                 
                     final_output = {"messages": text, "image_url": []}
@@ -224,8 +228,31 @@ async def agentcore_strands(payload):
             else:
                 logger.info(f"event: {event}")
 
-        if not (final_output.get("messages") or "").strip() and streamed_text.strip():
-            final_output = {"messages": streamed_text, "image_url": []}
+        result_text = final_output.get("messages") or streamed_text
+        if not (result_text or "").strip() and streamed_text.strip():
+            result_text = streamed_text
+
+        # Final stop_reason wins even when earlier turns left preamble text
+        # (e.g. "확인해보겠습니다" + tools, then empty refusal).
+        if stop_reason == "content_filtered":
+            result_text = (
+                "요청이 모델 안전 정책에 의해 차단되었습니다. "
+                "다른 모델로 시도하거나 질문을 바꿔 주세요."
+            )
+        elif stop_reason == "guardrail_intervened":
+            result_text = (
+                "요청이 Guardrail 안전 정책에 의해 차단되었습니다. "
+                "질문을 바꿔 주세요."
+            )
+        elif stop_reason == "refusal":
+            result_text = (
+                "모델이 이 요청에 대한 응답을 거부했습니다. "
+                "다른 모델로 시도하거나 질문을 바꿔 주세요."
+            )
+        elif not (result_text or "").strip():
+            result_text = "답변을 찾지 못하였습니다."
+
+        final_output = {"messages": result_text, "image_url": []}
 
     yield({'result': final_output})
 
