@@ -5,7 +5,7 @@ WORKDIR /app
 # Install Python packages
 RUN pip install streamlit streamlit-chat
 RUN pip install boto3 langchain_aws langchain langchain_community langgraph langchain_experimental langgraph-supervisor langgraph-swarm langchain-text-splitters
-RUN pip install mcp langchain-mcp-adapters
+RUN pip install "mcp>=2.1.1"
 RUN pip install pandas numpy
 RUN pip install tavily-python==0.5.0 pytz>=2025.2
 RUN pip install beautifulsoup4==4.12.3 plotly_express==0.4.1 matplotlib==3.10.0 PyPDF2==3.0.1

@@ -18,7 +18,7 @@ WORKDIR /app
 # Core dependencies (LangGraph Dockerfile과 동일하게 botocore 명시)
 RUN pip install boto3 botocore --upgrade
 RUN pip install mcp
-RUN pip install strands-agents strands-agents-tools
+RUN pip install "strands-agents[openai,otel] @ git+https://github.com/strands-agents/sdk-python.git@main#subdirectory=strands-py" "strands-agents-tools>=0.8.1"
 RUN pip install bedrock-agentcore uv
 
 # OpenTelemetry

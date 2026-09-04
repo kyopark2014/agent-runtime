@@ -764,14 +764,15 @@ def buildChatAgentWithHistory(tools):
     )
 
 def load_multiple_mcp_server_parameters(mcp_json: dict):
+    """Build per-server configs compatible with langchain.mcp.MCPAdapter / MCPConfig."""
     mcpServers = mcp_json.get("mcpServers")
   
     server_info = {}
     if mcpServers is not None:
         for server_name, config in mcpServers.items():
-            if config.get("type") in ("streamable_http", "http"):
+            if config.get("type") in ("streamable_http", "http", "streamable-http"):
                 connection = {
-                    "transport": "streamable_http",
+                    "transport": "http",
                     "url": config.get("url"),
                     "headers": config.get("headers", {})
                 }
