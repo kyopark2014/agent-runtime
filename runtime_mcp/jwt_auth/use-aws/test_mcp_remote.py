@@ -7,7 +7,8 @@ import sys
 import logging
 
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.shared._httpx_utils import create_mcp_http_client
 
 # Setup logging for Knowledge Base functions
 logging.basicConfig(
@@ -246,95 +247,96 @@ async def main():
         logging.info(f"Timeout: 120 seconds")
         
         # Now try the MCP connection with better error handling
-        logging.info("1. Attempting streamablehttp_client connection...")
-        async with streamablehttp_client(mcp_url, headers, timeout=120, terminate_on_close=False) as (
-            read_stream, write_stream, _):
+        logging.info("1. Attempting streamable_http_client connection...")
+        _http = create_mcp_http_client(headers=headers)
+        async with _http:
+            async with streamable_http_client(mcp_url, http_client=_http, terminate_on_close=False) as (read_stream, write_stream):
             
-            logging.info("2. streamablehttp_client connection successful!")
-            logging.info("3. Creating ClientSession...")
+                logging.info("2. streamable_http_client connection successful!")
+                logging.info("3. Creating ClientSession...")
             
-            async with ClientSession(read_stream, write_stream) as session:
-                logging.info("4. ClientSession created successfully!")
-                logging.info("5. Calling session.initialize()...")
+                async with ClientSession(read_stream, write_stream) as session:
+                    logging.info("4. ClientSession created successfully!")
+                    logging.info("5. Calling session.initialize()...")
                 
-                # Add timeout for initialize
-                try:
-                    await asyncio.wait_for(session.initialize(), timeout=30)
-                    logging.info("6. session.initialize() successful!")
-                except asyncio.TimeoutError:
-                    logging.info("session.initialize() timeout (30s)")
-                    return
-                except Exception as init_error:
-                    logging.info(f"session.initialize() failed: {init_error}")
-                    return
+                    # Add timeout for initialize
+                    try:
+                        await asyncio.wait_for(session.initialize(), timeout=30)
+                        logging.info("6. session.initialize() successful!")
+                    except asyncio.TimeoutError:
+                        logging.info("session.initialize() timeout (30s)")
+                        return
+                    except Exception as init_error:
+                        logging.info(f"session.initialize() failed: {init_error}")
+                        return
                 
-                logging.info("7. Calling session.list_tools()...")
+                    logging.info("7. Calling session.list_tools()...")
                 
-                # Add timeout for list_tools
-                try:
-                    tool_result = await asyncio.wait_for(session.list_tools(), timeout=30)
-                    logging.info(f"8. session.list_tools() successful!")
-                    logging.info(f"\nAvailable tools: {len(tool_result.tools)}")
-                    for tool in tool_result.tools:
-                        logging.info(f"  - {tool.name}: {tool.description[:100]}...")
-                except asyncio.TimeoutError:
-                    logging.info("session.list_tools() timeout (30s)")
-                    return
-                except Exception as tools_error:
-                    logging.info(f"session.list_tools() failed: {tools_error}")
-                    return
+                    # Add timeout for list_tools
+                    try:
+                        tool_result = await asyncio.wait_for(session.list_tools(), timeout=30)
+                        logging.info(f"8. session.list_tools() successful!")
+                        logging.info(f"\nAvailable tools: {len(tool_result.tools)}")
+                        for tool in tool_result.tools:
+                            logging.info(f"  - {tool.name}: {tool.description[:100]}...")
+                    except asyncio.TimeoutError:
+                        logging.info("session.list_tools() timeout (30s)")
+                        return
+                    except Exception as tools_error:
+                        logging.info(f"session.list_tools() failed: {tools_error}")
+                        return
                                 
-                # Test AWS S3 bucket list retrieval
-                logging.info("\n=== Testing AWS S3 List Buckets ===")
-                s3_params = {
-                    "service_name": "s3",
-                    "operation_name": "list_buckets",
-                    "parameters": {},
-                    "region": "us-west-2",
-                    "label": "List S3 buckets"
-                }
+                    # Test AWS S3 bucket list retrieval
+                    logging.info("\n=== Testing AWS S3 List Buckets ===")
+                    s3_params = {
+                        "service_name": "s3",
+                        "operation_name": "list_buckets",
+                        "parameters": {},
+                        "region": "us-west-2",
+                        "label": "List S3 buckets"
+                    }
                 
-                logging.info("8. S3 list_buckets 호출 중...")
-                try:
-                    result = await asyncio.wait_for(session.call_tool("use_aws", s3_params), timeout=60)
-                    logging.info(f"10. S3 list_buckets 성공!")
-                    logging.info(f"Result: {result}")
+                    logging.info("8. S3 list_buckets 호출 중...")
+                    try:
+                        result = await asyncio.wait_for(session.call_tool("use_aws", s3_params), timeout=60)
+                        logging.info(f"10. S3 list_buckets 성공!")
+                        logging.info(f"Result: {result}")
                     
-                    if hasattr(result, 'content') and result.content:
-                        for content in result.content:
-                            if hasattr(content, 'text'):
-                                logging.info(f"Content: {content.text}")
-                except asyncio.TimeoutError:
-                    logging.info("S3 list_buckets 타임아웃 (60초)")
-                except Exception as s3_error:
-                    logging.info(f"S3 list_buckets 실패: {s3_error}")
+                        if hasattr(result, 'content') and result.content:
+                            for content in result.content:
+                                if hasattr(content, 'text'):
+                                    logging.info(f"Content: {content.text}")
+                    except asyncio.TimeoutError:
+                        logging.info("S3 list_buckets 타임아웃 (60초)")
+                    except Exception as s3_error:
+                        logging.info(f"S3 list_buckets 실패: {s3_error}")
                 
-                # Test AWS EC2 instance list retrieval
-                logging.info("\n=== Testing AWS EC2 Describe Instances ===")
-                ec2_params = {
-                    "service_name": "ec2",
-                    "operation_name": "describe_instances",
-                    "parameters": {"MaxResults": 5},
-                    "region": "us-west-2",
-                    "label": "List EC2 instances"
-                }
+                    # Test AWS EC2 instance list retrieval
+                    logging.info("\n=== Testing AWS EC2 Describe Instances ===")
+                    ec2_params = {
+                        "service_name": "ec2",
+                        "operation_name": "describe_instances",
+                        "parameters": {"MaxResults": 5},
+                        "region": "us-west-2",
+                        "label": "List EC2 instances"
+                    }
                 
-                logging.info("9. EC2 describe_instances 호출 중...")
-                try:
-                    result = await asyncio.wait_for(session.call_tool("use_aws", ec2_params), timeout=60)
-                    logging.info(f"12. EC2 describe_instances 성공!")
-                    logging.info(f"Result: {result}")
+                    logging.info("9. EC2 describe_instances 호출 중...")
+                    try:
+                        result = await asyncio.wait_for(session.call_tool("use_aws", ec2_params), timeout=60)
+                        logging.info(f"12. EC2 describe_instances 성공!")
+                        logging.info(f"Result: {result}")
                     
-                    if hasattr(result, 'content') and result.content:
-                        for content in result.content:
-                            if hasattr(content, 'text'):
-                                logging.info(f"Content: {content.text}")
-                except asyncio.TimeoutError:
-                    logging.info("EC2 describe_instances 타임아웃 (60초)")
-                except Exception as ec2_error:
-                    logging.info(f"EC2 describe_instances 실패: {ec2_error}")
+                        if hasattr(result, 'content') and result.content:
+                            for content in result.content:
+                                if hasattr(content, 'text'):
+                                    logging.info(f"Content: {content.text}")
+                    except asyncio.TimeoutError:
+                        logging.info("EC2 describe_instances 타임아웃 (60초)")
+                    except Exception as ec2_error:
+                        logging.info(f"EC2 describe_instances 실패: {ec2_error}")
                 
-                logging.info("\n=== MCP Connection Test Complete ===")
+                    logging.info("\n=== MCP Connection Test Complete ===")
                                 
     except Exception as e:
         logging.info(f"MCP connection failed: {e}")
