@@ -2,6 +2,7 @@ FROM --platform=linux/arm64 python:3.13-slim
 
 RUN apt-get update && apt-get install -y \
     curl \
+    git \
     gnupg \
     build-essential \
     python3-dev \
@@ -20,6 +21,8 @@ RUN pip install boto3 botocore --upgrade
 RUN pip install mcp
 RUN pip install "strands-agents[openai,otel] @ git+https://github.com/strands-agents/sdk-python.git@main#subdirectory=strands-py" "strands-agents-tools>=0.8.1"
 RUN pip install bedrock-agentcore uv
+# Preinstall so aws documentation MCP skips uvx/PyPI cold start (see mcp_config.py)
+RUN pip install awslabs.aws-documentation-mcp-server
 
 # OpenTelemetry
 RUN pip install aws-opentelemetry-distro>=0.10.0

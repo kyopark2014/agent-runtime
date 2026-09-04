@@ -159,12 +159,13 @@ async def agentcore_strands(payload):
 
         strands_agent.mcp_manager.stop_agent_clients()
         strands_agent.init_mcp_clients(mcp_servers)
+        # Start persistent sessions once, then list_tools reuses them (no double spawn).
+        strands_agent.mcp_manager.start_agent_clients(mcp_servers)
         tools = strands_agent.update_tools(strands_tools, mcp_servers)
         strands_agent.agent = strands_agent.create_agent(tools, None)
+    else:
+        # Warm path: revive dead sessions or no-op when already running.
         strands_agent.mcp_manager.start_agent_clients(mcp_servers)
-
-    # Every request: ensure MCP sessions are alive (restart if needed; covers background session expiry when needs_agent is False).
-    strands_agent.mcp_manager.start_agent_clients(mcp_servers)
 
     # run agent
     with strands_agent.mcp_manager.get_active_clients(mcp_servers) as _:

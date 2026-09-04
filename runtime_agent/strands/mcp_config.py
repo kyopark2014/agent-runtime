@@ -1,6 +1,7 @@
 import logging
 import sys
 import os
+import shutil
 import boto3
 import utils
 
@@ -132,14 +133,26 @@ def load_config(mcp_type):
         }
 
     elif mcp_type == "aws_documentation":
+        # Prefer image-preinstalled binary over uvx (avoids PyPI resolve/install on cold start).
+        # Dockerfile: pip install awslabs.aws-documentation-mcp-server
+        env = {"FASTMCP_LOG_LEVEL": "ERROR"}
+        command = shutil.which("awslabs.aws-documentation-mcp-server")
+        args: list[str] = []
+        if not command:
+            logger.warning(
+                "awslabs.aws-documentation-mcp-server is not preinstalled; "
+                "falling back to uvx (slow on cold start). "
+                "Install with: pip install awslabs.aws-documentation-mcp-server "
+                "(or: uv tool install awslabs.aws-documentation-mcp-server)"
+            )
+            command = "uvx"
+            args = ["awslabs.aws-documentation-mcp-server@latest"]
         return {
             "mcpServers": {
                 "awslabs.aws-documentation-mcp-server": {
-                    "command": "uvx",
-                    "args": ["awslabs.aws-documentation-mcp-server@latest"],
-                    "env": {
-                        "FASTMCP_LOG_LEVEL": "ERROR"
-                    }
+                    "command": command,
+                    "args": args,
+                    "env": env,
                 }
             }
         }
