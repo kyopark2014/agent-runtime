@@ -56,6 +56,8 @@ RUN npm install -g @anthropic-ai/claude-code
 RUN pip install boto3 botocore --upgrade 
 RUN pip install claude-agent-sdk anyio
 RUN pip install bedrock-agentcore bedrock-agentcore-starter-toolkit uv
+# Preinstall aws-documentation MCP to skip uvx cold start
+RUN pip install awslabs.aws-documentation-mcp-server
 
 RUN pip install requests uuid
 
