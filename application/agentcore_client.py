@@ -814,7 +814,6 @@ def run_agent(prompt, user_id, agent_type, history_mode, mcp_servers, model_name
         )
         
         result = current = ""
-        processed_data = set()  # Prevent duplicate data
         
         # stream response
         if "text/event-stream" in response.get("contentType", ""):
@@ -826,13 +825,9 @@ def run_agent(prompt, user_id, agent_type, history_mode, mcp_servers, model_name
                 tool_name = ""
                 if line.startswith('data: '):
                     data = line[6:].strip()  # Remove "data:" prefix and whitespace
+                    # Do not dedupe by payload string: stream text deltas like
+                    # {"data": " "} / {"data": "니다."} legitimately repeat in one turn.
                     if data:  # Only process non-empty data
-                        # Check for duplicate data
-                        if data in processed_data:
-                            # logger.info(f"Skipping duplicate data: {data[:50]}...")
-                            continue
-                        processed_data.add(data)
-                        
                         try:
                             data_json = json.loads(data)
 
