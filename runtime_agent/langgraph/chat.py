@@ -2076,7 +2076,7 @@ def get_tool_info(tool_name, tool_content):
                 return content, urls, tool_references
             
             # search_results 배열에서 결과 추출
-            search_results = json_data.get('search_results', [])
+            search_results = json_data.get('search_results', []) if isinstance(json_data, dict) else []
             if not search_results:
                 # search_results가 없으면 json_data 자체가 배열일 수 있음
                 if isinstance(json_data, list):
@@ -2084,16 +2084,24 @@ def get_tool_info(tool_name, tool_content):
                 else:
                     logger.info(f"No search_results found in JSON data")
                     return content, urls, tool_references
-            
+
+            normalized = []
             for item in search_results:
-                logger.info(f"item: {item}")
-                
                 if isinstance(item, str):
                     try:
                         item = json.loads(item)
                     except json.JSONDecodeError:
                         logger.info(f"Failed to parse item as JSON: {item}")
                         continue
+                if isinstance(item, dict) and "search_results" in item and "url" not in item:
+                    nested = item.get("search_results")
+                    if isinstance(nested, list):
+                        normalized.extend(nested)
+                    continue
+                normalized.append(item)
+
+            for item in normalized:
+                logger.info(f"item: {item}")
                 
                 if isinstance(item, dict) and 'url' in item and 'title' in item:
                     url = item['url']
@@ -2386,18 +2394,27 @@ async def run_langgraph_agent(query, mcp_servers, history_mode, notification_que
                                 input = tool_input_list[toolUseId]
 
                                 if debug_mode == "Enable" and queue:
-                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
+                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {utils.truncate_for_stream(input)}")
                         
         elif isinstance(stream[0], ToolMessage):
             message = stream[0]
-            logger.info(f"ToolMessage: {message.name}, {message.content}")
             tool_name = message.name
             toolResult = message.content
             toolUseId = message.tool_call_id
-            logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
+            logger.info(
+                f"ToolMessage: {message.name}, "
+                f"{utils.truncate_for_log(toolResult)}"
+            )
+            logger.info(
+                f"toolResult: {utils.truncate_for_log(toolResult)}, "
+                f"toolUseId: {toolUseId}, len={len(str(toolResult or ''))}"
+            )
 
             if debug_mode == "Enable":
-                add_notification(notification_queue, f"Tool Result: {toolResult}")
+                add_notification(
+                    notification_queue,
+                    f"Tool Result: {utils.truncate_for_stream(toolResult)}",
+                )
             tool_used = True
             
             content, urls, refs = get_tool_info(tool_name, toolResult)
@@ -2522,16 +2539,25 @@ async def run_langgraph_agent_with_plan(query, mcp_servers, notification_queue):
 
                                 logger.info(f"tool_name: {tool_name}, input: {input}, toolUseId: {toolUseId}")
                                 if queue:
-                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {input}")
+                                    queue.tool_update(toolUseId, f"Tool: {tool_name}, Input: {utils.truncate_for_stream(input)}")
                         
         elif isinstance(stream[0], ToolMessage):
             message = stream[0]
-            logger.info(f"ToolMessage: {message.name}, {message.content}")
             tool_name = message.name
             toolResult = message.content
             toolUseId = message.tool_call_id
-            logger.info(f"toolResult: {toolResult}, toolUseId: {toolUseId}")
-            add_notification(notification_queue, f"Tool Result: {toolResult}")
+            logger.info(
+                f"ToolMessage: {message.name}, "
+                f"{utils.truncate_for_log(toolResult)}"
+            )
+            logger.info(
+                f"toolResult: {utils.truncate_for_log(toolResult)}, "
+                f"toolUseId: {toolUseId}, len={len(str(toolResult or ''))}"
+            )
+            add_notification(
+                notification_queue,
+                f"Tool Result: {utils.truncate_for_stream(toolResult)}",
+            )
             tool_used = True
             
             content, urls, refs = get_tool_info(tool_name, toolResult)

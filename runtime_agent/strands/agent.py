@@ -180,7 +180,7 @@ async def agentcore_strands(payload):
             if "data" in event:
                 text = event["data"]
                 streamed_text += text
-                logger.info(f"[data] {text}")
+                logger.info(f"[data] {utils.truncate_for_log(text)}")
                 yield({'data': text})
 
             elif "result" in event:
@@ -192,7 +192,7 @@ async def agentcore_strands(payload):
                 if message:
                     content = message.get("content", [])
                     text = content[0].get("text", "") if content else ""
-                    logger.info(f"[result] {text}")
+                    logger.info(f"[result] {utils.truncate_for_log(text)}")
                 
                     final_output = {"messages": text, "image_url": []}
 
@@ -202,26 +202,32 @@ async def agentcore_strands(payload):
                 input = current_tool_use.get("input", "")
                 toolUseId = current_tool_use.get("toolUseId", "")
 
-                text = f"name: {name}, input: {input}"
+                text = f"name: {name}, input: {utils.truncate_for_log(input)}"
                 logger.info(f"[current_tool_use] {text}")
 
                 yield({'tool': name, 'input': input, 'toolUseId': toolUseId})
             
             elif "message" in event:
                 message = event["message"]
-                logger.info(f"[message] {message}")
+                logger.info(f"[message] {utils.truncate_for_log(message)}")
 
                 if "content" in message:
                     content = message["content"]
-                    logger.info(f"tool content: {content}")
+                    logger.info(f"tool content: {utils.truncate_for_log(content)}")
                     if "toolResult" in content[0]:
                         toolResult = content[0]["toolResult"]
                         toolUseId = toolResult["toolUseId"]
                         toolContent = toolResult["content"]
                         toolResult = toolContent[0].get("text", "")
-                        logger.info(f"[toolResult] {toolResult}, [toolUseId] {toolUseId}")
+                        logger.info(
+                            f"[toolResult] {utils.truncate_for_log(toolResult)}, "
+                            f"[toolUseId] {toolUseId}, len={len(toolResult)}"
+                        )
                         
-                        yield({'toolResult': toolResult, 'toolUseId': toolUseId})
+                        yield({
+                            'toolResult': utils.truncate_for_stream(toolResult),
+                            'toolUseId': toolUseId,
+                        })
             
             elif "contentBlockDelta" or "contentBlockStop" or "messageStop" or "metadata" in event:
                 pass

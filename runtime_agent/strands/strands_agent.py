@@ -1143,7 +1143,7 @@ async def run_strands_agent(query: str, strands_tools: list[str], mcp_servers: l
             text = ""
             if "data" in event:
                 text = event["data"]
-                logger.info(f"[data] {text}")
+                logger.info(f"[data] {utils.truncate_for_log(text)}")
                 current += text
                 queue.stream(current)
 
@@ -1153,30 +1153,33 @@ async def run_strands_agent(query: str, strands_tools: list[str], mcp_servers: l
                 if message:
                     content = message.get("content", [])
                     result = content[0].get("text", "")
-                    logger.info(f"[result] {result}")
+                    logger.info(f"[result] {utils.truncate_for_log(result)}")
                     final_result = result
 
             elif "current_tool_use" in event:
                 current_tool_use = event["current_tool_use"]
-                logger.info(f"current_tool_use: {current_tool_use}")
+                logger.info(f"current_tool_use: {utils.truncate_for_log(current_tool_use)}")
                 name = current_tool_use.get("name", "")
                 input_val = current_tool_use.get("input", "")
                 toolUseId = current_tool_use.get("toolUseId", "")
 
-                text = f"name: {name}, input: {input_val}"
+                text = f"name: {name}, input: {utils.truncate_for_log(input_val)}"
                 logger.info(f"[current_tool_use] {text}")
 
                 queue.register_tool(toolUseId, name)
-                queue.tool_update(toolUseId, f"Tool: {name}, Input: {input_val}")
+                queue.tool_update(
+                    toolUseId,
+                    f"Tool: {name}, Input: {utils.truncate_for_stream(input_val)}",
+                )
                 current = ""
 
             elif "message" in event:
                 message = event["message"]
-                logger.info(f"[message] {message}")
+                logger.info(f"[message] {utils.truncate_for_log(message)}")
 
                 if "content" in message:
                     msg_content = message["content"]
-                    logger.info(f"tool content: {msg_content}")
+                    logger.info(f"tool content: {utils.truncate_for_log(msg_content)}")
                     for item in msg_content:
                         if "toolResult" not in item:
                             continue
@@ -1185,8 +1188,13 @@ async def run_strands_agent(query: str, strands_tools: list[str], mcp_servers: l
                         toolContent = toolResult["content"]
                         toolResultText = toolContent[0].get("text", "")
                         tool_name = queue.get_tool_name(toolUseId)
-                        logger.info(f"[toolResult] {toolResultText}, [toolUseId] {toolUseId}")
-                        queue.notify(f"Tool Result: {str(toolResultText)}")
+                        logger.info(
+                            f"[toolResult] {utils.truncate_for_log(toolResultText)}, "
+                            f"[toolUseId] {toolUseId}, len={len(toolResultText)}"
+                        )
+                        queue.notify(
+                            f"Tool Result: {utils.truncate_for_stream(toolResultText)}"
+                        )
 
                         info_content, urls, refs = chat.get_tool_info(tool_name, toolResultText)
                         if refs:

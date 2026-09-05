@@ -263,8 +263,15 @@ async def agent_langgraph(payload):
                         yield {"tool": name, "input": args, "toolUseId": tid}
 
         elif isinstance(chunk, ToolMessage):
-            logger.info(f"ToolMessage: {chunk.name}, {chunk.content}")
-            yield {"toolResult": chunk.content, "toolUseId": chunk.tool_call_id}
+            tool_result_text = chunk.content
+            logger.info(
+                f"ToolMessage: {chunk.name}, "
+                f"{utils.truncate_for_log(tool_result_text)}"
+            )
+            yield {
+                "toolResult": utils.truncate_for_stream(tool_result_text),
+                "toolUseId": chunk.tool_call_id,
+            }
 
     try:
         snap = await app.aget_state(config)
