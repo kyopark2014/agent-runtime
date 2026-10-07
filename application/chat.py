@@ -100,6 +100,18 @@ def get_chat(extended_thinking=None):
             "stop_sequences": [STOP_SEQUENCE]
         }
 
+    _mid = (modelId or "").lower()
+    if (
+        "fable" in _mid
+        or "claude-sonnet-5" in _mid
+        or "claude-5-sonnet" in _mid
+        or "claude-opus-5" in _mid
+        or "claude-5-opus" in _mid
+    ):
+        parameters.pop("temperature", None)
+        parameters.pop("top_k", None)
+        parameters.pop("top_p", None)
+        parameters.pop("thinking", None)
     chat = ChatBedrock(   # new chat model
         model_id=modelId,
         client=boto3_bedrock, 
