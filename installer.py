@@ -23,7 +23,7 @@ import urllib.error
 # Configuration
 project_name = "agent-runtime" # at least 3 characters
 region = "us-west-2"
-AGENTCORE_GATEWAY_REGION = "us-east-1"
+AGENTCORE_GATEWAY_REGION = "us-west-2"
 AGENTCORE_WEBSEARCH_GATEWAY_NAME = "gateway-websearch"
 AGENTCORE_WEBSEARCH_TARGET_NAME = "websearch"
 git_name = "agent-runtime"
@@ -3324,7 +3324,7 @@ def _ensure_websearch_gateway_target(gateway_id: str) -> str:
 
 
 def get_or_create_agentcore_websearch_gateway(gateway_service_role_arn: str) -> Dict[str, str]:
-    """Create gateway-websearch with the managed web-search connector in us-east-1."""
+    """Create gateway-websearch with the managed web-search connector in us-west-2."""
     logger.info("[2/10] Creating AgentCore Web Search gateway")
 
     gateway_id = None
@@ -3656,8 +3656,8 @@ chown -R ssm-user:ssm-user /home/ssm-user/{git_name}
 
 # Build and run docker with volume mount for config.json
 cd /home/ssm-user/{git_name}
-docker build -f Dockerfile -t streamlit-app .
-docker run -d --restart=always -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json --name app streamlit-app
+docker build -f Dockerfile -t agent-runtime-ui .
+docker run -d --restart=always -p 8501:8501 -v $(pwd)/application/config.json:/app/application/config.json --name app agent-runtime-ui
 
 # Make update.sh executable for manual execution via SSM
 chmod a+rx update.sh
@@ -3967,7 +3967,7 @@ def create_alb_target_group_and_listener(alb_info: Dict[str, str], instance_id: 
                 Port=target_port,
                 VpcId=vpc_info["vpc_id"],
                 HealthCheckProtocol="HTTP",
-                HealthCheckPath="/",
+                HealthCheckPath="/api/health",
                 HealthCheckIntervalSeconds=30,
                 HealthCheckTimeoutSeconds=5,
                 HealthyThresholdCount=2,
